@@ -78,6 +78,22 @@ class VerifyTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("frontmatter", result.stdout.lower())
 
+    def test_rejects_agent_skills_name_violations(self):
+        for invalid_name in ("-bad", "bad-", "bad--name", "a" * 65):
+            with self.subTest(name=invalid_name), tempfile.TemporaryDirectory() as td:
+                root = pathlib.Path(td)
+                body = "Ground current truth."
+                skill = (
+                    f"---\nname: {invalid_name}\n"
+                    "description: Use when scope drift or false completion can corrupt a task.\n"
+                    f"---\n\n# Verified Delta\n\n{body}\n"
+                )
+                write_project(root, body, count_words(skill))
+                (root / "SKILL.md").write_text(skill, encoding="utf-8")
+                result = self.run_verify(root)
+                self.assertNotEqual(result.returncode, 0, invalid_name)
+                self.assertIn("name", result.stdout.lower())
+
     def test_closed_behavioral_gate_requires_all_eval_gates_closed(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
