@@ -16,14 +16,17 @@ Until every relevant gate is closed, the repository may say **designed**, **revi
 
 ## Evidence Classes
 
-Keep four evidence classes separate:
+Keep evidence roles separate:
 
 - **Development probe** — public scenario used to expose and diagnose a failure.
 - **Regression case** — a previously observed failure retained after a fix.
-- **Hidden holdout** — unseen task used only after wording choices are frozen.
+- **Selection-validation case** — unseen instance used after wording/metadata selection to detect adaptive overfitting before the final holdout.
+- **Hidden holdout** — unseen task used only after wording and delivery-form choices are frozen.
 - **Production observation** — real task evidence collected outside the benchmark.
 
 The public scenarios in this file are development probes, not final holdouts. Final holdout prompts must not be committed before evaluation. Record their immutable hashes, generation/source procedure, grading contract, and results so the experiment can be audited without leaking the cases.
+
+Do not report the best score on the same cases repeatedly used to choose wording as an unbiased estimate of future performance. Selection changes the meaning of that score. Freeze a shortlist, validate it on fresh cases, then reserve the final hidden holdout for the frozen procedure.
 
 ## Experimental Unit
 
@@ -36,6 +39,8 @@ Compare control and candidate only under matched configurations. Randomize or co
 Each trial begins from a clean state. Shared files, caches, git history, previous transcripts, or other trial residue invalidate independence unless they are intentionally part of the task.
 
 Do not pool results across agent harnesses as though harness were a nuisance variable. Skill discovery, retrieval, injection, context retention, and tool policy are part of the intervention and must be reported per harness before any cross-harness summary.
+
+Repeated stochastic trials on one task estimate that task's reliability; they do not create the same evidence as additional independent tasks. Keep the task as the primary paired unit when comparing variants, retain per-task results, and report uncertainty rather than treating every trial as an independent benchmark item. There is no universal trial count: pre-register the decision, smallest practically meaningful difference, serious-failure tolerance, maximum budget, and stopping rule before looking at the candidate result.
 
 ## Grading Contract
 
@@ -50,6 +55,8 @@ Use the cheapest reliable grader for each property:
 A task may have multiple graders. Read the full transcript for every surprising failure, every grader disagreement, and every result used to justify a runtime wording change.
 
 For subjective comparisons, hide variant identity from the judge where practical. Do not let the same generated rationale define both the answer and its success criterion.
+
+For paired candidate/control tasks, preserve the pairing in analysis. Report the direction and size of task-level deltas and an uncertainty interval appropriate to the metric; do not promote a tiny aggregate difference to a design rule merely because many repeated trials made the nominal sample count large.
 
 ## Core Scoring
 
@@ -86,6 +93,13 @@ Treat four questions as distinct:
 3. **Compliance / Boundary** — after retrieval, does the agent use the guidance without violating task authority, scope, or opposing controls?
 4. **Form-factor fit** — is on-demand loading better than a smaller always-on instruction or no added guidance for the intended workload?
 
+Use two different task populations and never confuse them:
+
+- a **balanced diagnostic activation set** with enough should-load and should-not-load cases to expose under-triggering and over-triggering;
+- a **representative workload sample** that preserves the intended deployment prevalence and task mix, used for end-to-end cost/benefit and form-factor decisions.
+
+A balanced diagnostic set estimates conditional behavior, not natural activation prevalence. A representative workload estimates prevalence, not fine-grained boundary coverage. Report both.
+
 ### A1 — Utility Upper Bound
 
 Before optimizing metadata, compare matched trials under:
@@ -99,7 +113,7 @@ Report cost together with benefit. A behavior gain purchased by large context ov
 
 ### A2 — Trigger Under Progressive Disclosure
 
-Only after the utility upper bound is worth testing, evaluate normal discovery with balanced **should-load / should-not-load** tasks. Include:
+Only after the utility upper bound is worth testing, evaluate normal discovery on the balanced diagnostic activation set. Include:
 
 - clear positives;
 - paraphrased positives;
@@ -108,9 +122,11 @@ Only after the utility upper bound is worth testing, evaluate normal discovery w
 - lexical negatives containing trigger-like words without the target failure risk;
 - competing-skill or distractor-skill settings when the target harness normally exposes multiple skills.
 
-Use the same task set to compare the current description with genuinely different metadata forms. Natural-language descriptions are behavioral inputs, not passive labels; small wording changes can materially alter selection.
+Use the same task set to compare the current description with genuinely different description variants. Natural-language descriptions are behavioral inputs, not passive labels; small wording changes can materially alter selection.
 
 Measure at least trigger precision, trigger recall, false-trigger rate, missed-trigger rate, and downstream task success **conditioned on whether the skill was actually retrieved**. Do not infer a trigger problem from end-task failure without checking the retrieval event.
+
+After selecting metadata on development cases, rerun the frozen candidate on unseen selection-validation cases before treating its trigger behavior as stable.
 
 ### A3 — Compliance and Boundary
 
@@ -125,7 +141,7 @@ A high trigger rate with poor compliance is not an activation success. A high co
 
 ### A4 — Form-Factor Test
 
-After RED/utility evidence identifies the behavior worth preserving, compare delivery forms on a representative workload rather than assuming “skill” is the correct abstraction:
+After RED/utility evidence identifies the behavior worth preserving, compare delivery forms on the **representative workload sample**, not the artificially balanced activation set:
 
 - `F0`: no added guidance;
 - `F1`: current discoverable on-demand skill;
@@ -148,15 +164,16 @@ Do not invent a universal trigger-rate threshold. Pre-register the acceptance cr
 
 For each target runtime:
 
-1. freeze the activation set before comparing descriptions;
-2. compare the current trigger-oriented metadata against variants that express **what the skill does + when it applies**, as recommended by the Agent Skills standard;
+1. freeze the activation development set before comparing descriptions;
+2. compare the current metadata against variants that express **what the skill does + when it applies**, as recommended by the Agent Skills standard;
 3. include a shorter and a materially different variant rather than punctuation-only edits;
 4. measure selection and downstream behavior, not semantic similarity between descriptions;
-5. keep the shortest description on the Pareto frontier of useful trigger recall, false-trigger cost, and task outcome.
+5. freeze the shortlist before unseen selection-validation cases;
+6. keep the shortest description on the Pareto frontier of useful trigger recall, false-trigger cost, and task outcome.
 
 The repository's current `Use when...` and ≤500-character rules are project policies, not universal Agent Skills requirements. Agent Skills currently permits descriptions up to 1024 characters. Change these policies only if activation evidence supports the change.
 
-This gate closes only after the intended delivery form, target harnesses, acceptance criteria, matched results, and activation costs are recorded. Metadata tuning alone cannot close it.
+This gate closes only after the intended delivery form, target harnesses, acceptance criteria, matched results, validation behavior, and activation costs are recorded. Metadata tuning alone cannot close it.
 
 ## Gate B — RED Baseline
 
@@ -408,7 +425,8 @@ The evaluation contract is informed by external evidence, not treated as proof o
 - Han et al., *SWE-Skills-Bench* (2026): most tested public SWE skills produced no pass-rate gain; some increased token cost substantially or degraded results, so skill injection must prove marginal utility rather than being presumed beneficial.
 - GitHub Copilot documentation (2026): use custom instructions for simple guidance relevant to almost every task and skills for detailed guidance that should load only when relevant; this motivates testing the delivery abstraction itself.
 - Faghih et al., *Tool Preferences in Agentic LLMs are Unreliable* (EMNLP 2025): natural-language descriptions can drastically alter selection frequency, motivating behavioral A/B tests of skill metadata.
-- Anthropic, *Demystifying evals for AI agents* (2026): tasks/trials/graders/transcripts/outcomes, isolated environments, multiple trials, `pass@k` and `pass^k`, transcript inspection.
+- Anthropic, *Demystifying evals for AI agents* (2026): tasks/trials/graders/transcripts/outcomes, isolated environments, repeated trials, balanced behavior/opposing controls, and transcript inspection.
+- Xu et al., *Towards Reliable LLM Evaluation: Correcting the Winner's Curse in Adaptive Benchmarking* (2026): repeated adaptive selection on the same benchmark can make the winner's reported score optimistic; freeze selected procedures and use fresh evaluation data for inference.
 - Anthropic, *Quantifying infrastructure noise in agentic coding evals* (2026): runtime configuration is a material experimental variable.
 - Anthropic, *Eval awareness in Claude Opus 4.6's BrowseComp performance* (2026): public benchmarks can be contaminated or recognized by capable agents.
 - Anthropic, *An update on recent Claude Code quality reports* (2026): line-level system-prompt ablation exposed a measurable regression and motivated broader prompt-change evals.
