@@ -55,6 +55,7 @@ External research currently supports the **questions and eval design**, not the 
 - infrastructure and resource configuration can move agentic benchmark scores enough to confound small deltas;
 - public benchmarks can be contaminated or recognized by capable tool-using agents, so final holdouts must stay unseen;
 - line-level prompt ablation can expose regressions that static review misses;
+- prompt-attribution research shows that semantic prompt units can have joint/combinatorial effects, so leave-one-out removal alone is insufficient when two units may substitute for or interact with one another;
 - prompt formulation can materially change performance even when semantic intent appears similar;
 - coding agents show strong action bias on tasks where the correct delta is no code change;
 - scope evaluations can become artificially easy when authorization boundaries are explicitly declared instead of inferred;
@@ -63,7 +64,7 @@ External research currently supports the **questions and eval design**, not the 
 - overthinking research supports scaling deliberation to task difficulty rather than maximizing reasoning by default;
 - instruction-hierarchy research motivates testing retrieved/tool content as evidence with a trust level rather than assuming all text has equal authority.
 
-These findings do not prove Verified Delta works; they define failures it must survive.
+These findings do not prove Verified Delta works; they define failures and attribution traps it must survive.
 
 ## Explicit Non-Goals
 
@@ -82,7 +83,7 @@ Do not expand this repository into:
 2. **RED behavioral baseline missing.** E1–E13 need fresh no-skill trials; public probes are development tasks, not final holdouts.
 3. **GREEN behavioral comparison missing.** Matched runs with the unchanged 446-word kernel are required.
 4. **Wording micro-tests missing.** Competing phrasings need no-guidance controls, repeated fresh contexts, and manual transcript review.
-5. **Semantic ablation unexecuted.** Runtime units now have planned pressure coverage, but no unit has proved residency by removal/compression. If a mapped probe does not discriminate the unit during RED/ablation, the coverage claim must be revised rather than counted as success.
+5. **Semantic ablation unexecuted.** Runtime units now have planned pressure coverage, but no unit has proved residency by removal/compression. Use single-unit ablation first, then test suspected overlapping pairs/groups before declaring independently silent units redundant; two units can each look unnecessary when the other substitutes for it. If a mapped probe does not discriminate the unit during RED/ablation, revise the coverage claim rather than counting success.
 6. **Hidden cross-domain holdout missing.** Final holdout prompts must remain outside the public repository until evaluation is complete.
 7. **Compression hypothesis unresolved.** Because activation may be broad, test whether materially shorter kernels preserve behavior; do not assume 446 words are necessary or that an arbitrary smaller target is better.
 8. **Frontmatter policy is partly project-specific.** Agent Skills permits descriptions up to 1024 characters and recommends describing what+when; this repo currently enforces ≤500 and `Use when...`. Resolve by activation evidence before changing either policy.
@@ -103,6 +104,7 @@ These debts block claims of behavioral verification or convergence.
 - Adding runtime support files before evaluation proves progressive disclosure is needed.
 - Treating public E1–E13 as an unseen holdout.
 - Treating a semantic coverage table as proof that a sentence works.
+- Treating two individually silent ablations as proof both units are useless without checking interaction/redundancy.
 - Changing the runtime because external research merely sounds compatible with it.
 
 ## Next Best Action
