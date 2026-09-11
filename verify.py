@@ -9,7 +9,6 @@ import sys
 
 REQUIRED = ("SKILL.md", "CONSTITUTION.md", "EVALS.md", "STATE.md", "README.md")
 MAX_SKILL_WORDS = 500
-NAME_RE = re.compile(r"^[a-z0-9-]+$")
 
 
 def fail(errors: list[str], message: str) -> None:
@@ -36,12 +35,22 @@ def gate(text: str, label: str) -> str:
     return match.group(1).upper() if match else "OPEN"
 
 
+def valid_skill_name(name: str) -> bool:
+    return (
+        1 <= len(name) <= 64
+        and re.fullmatch(r"[a-z0-9-]+", name) is not None
+        and name[0] != "-"
+        and name[-1] != "-"
+        and "--" not in name
+    )
+
+
 def verify(root: pathlib.Path) -> list[str]:
     errors: list[str] = []
 
-    for name in REQUIRED:
-        if not (root / name).is_file():
-            fail(errors, f"missing required file: {name}")
+    for required_name in REQUIRED:
+        if not (root / required_name).is_file():
+            fail(errors, f"missing required file: {required_name}")
     if errors:
         return errors
 
@@ -55,8 +64,8 @@ def verify(root: pathlib.Path) -> list[str]:
     else:
         name = fm.get("name", "")
         description = fm.get("description", "")
-        if not NAME_RE.fullmatch(name):
-            fail(errors, "SKILL.md frontmatter name must match [a-z0-9-]+")
+        if not valid_skill_name(name):
+            fail(errors, "SKILL.md frontmatter name violates Agent Skills naming constraints")
         if not description.startswith("Use when"):
             fail(errors, "SKILL.md frontmatter description must start with 'Use when'")
         if len(description) > 500:
@@ -80,7 +89,7 @@ def verify(root: pathlib.Path) -> list[str]:
         "Cross-domain holdout": gate(evals, "Cross-domain holdout"),
     }
     if state_gate == "CLOSED" and any(value != "CLOSED" for value in eval_gates.values()):
-        open_gates = ", ".join(name for name, value in eval_gates.items() if value != "CLOSED")
+        open_gates = ", ".join(label for label, value in eval_gates.items() if value != "CLOSED")
         fail(errors, f"Behavioral verification gate is CLOSED while eval gates remain OPEN: {open_gates}")
 
     return errors
