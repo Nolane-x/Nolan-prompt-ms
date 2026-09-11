@@ -33,7 +33,8 @@ The repository exists to maximize **behavioral leverage per token** through one 
 - `CONSTITUTION.md` defines sentence residency, compression, evidence, scope, and continuity laws.
 - `verify.py` deterministically checks required files, frontmatter, the 500-word ceiling, state/count drift, and false behavioral-gate closure.
 - `tests/test_verify.py` has five stdlib regression tests; the local RED run failed 5/5 before `verify.py`, and the local GREEN run passed 5/5 after it.
-- `.github/workflows/verify.yml` is configured to run those checks on pushes and pull requests; no remote workflow run had been observed at the moment this state was written.
+- `.github/workflows/verify.yml` runs static checks on pushes and pull requests.
+- GitHub Actions run `34613227602` on `main@caf0411b13103833eaefd80c33ffae5ea4867c3b` completed successfully; both the unit-test step and `python verify.py` passed.
 - No runtime dependency, model profile, prompt-template catalog, memory system, or multi-agent framework has been added.
 - No fresh isolated-agent RED/GREEN behavioral run has been completed yet.
 
@@ -72,7 +73,6 @@ Do not expand this repository into:
 3. **Wording micro-tests missing.** Competing phrasings need repeated fresh contexts.
 4. **Semantic ablation missing.** No core sentence has demonstrated behavioral necessity by removal.
 5. **Cross-domain holdout missing.** Coding, research, writing, and simple-task cases need unseen tests.
-6. **Remote CI observation pending.** Confirm at least one GitHub workflow run before calling the static gate remotely exercised.
 
 These debts block claims of behavioral verification or convergence.
 
@@ -88,7 +88,7 @@ These debts block claims of behavioral verification or convergence.
 
 ## Next Best Action
 
-First confirm the remote static workflow executes successfully. Then run the **RED behavioral baseline** from `EVALS.md` in isolated fresh contexts without loading `SKILL.md`, recording exact failures and rationalizations.
+Run the **RED behavioral baseline** from `EVALS.md` in isolated fresh contexts without loading `SKILL.md`, recording exact failures and rationalizations.
 
 Only then alter the kernel. The first semantic edit must target a demonstrated failure; if no scenario fails, do not add guidance merely to make the skill look more complete.
 
