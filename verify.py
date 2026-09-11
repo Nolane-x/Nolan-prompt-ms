@@ -46,17 +46,14 @@ def valid_skill_name(name: str) -> bool:
 
 
 def find_skill(root: pathlib.Path, errors: list[str]) -> pathlib.Path | None:
-    legacy = root / "SKILL.md"
+    if (root / "SKILL.md").exists():
+        fail(errors, "root SKILL.md is not allowed; expected exactly one nested skill package")
+        return None
     nested = sorted(path for path in root.glob("*/SKILL.md") if path.is_file())
-    if legacy.is_file():
-        if nested:
-            fail(errors, "multiple skill entrypoints found: root SKILL.md and nested SKILL.md")
-            return None
-        return legacy
     if len(nested) == 1:
         return nested[0]
     if not nested:
-        fail(errors, "missing skill entrypoint: expected SKILL.md or exactly one */SKILL.md")
+        fail(errors, "missing nested skill entrypoint: expected exactly one */SKILL.md")
     else:
         fail(errors, "multiple nested skill entrypoints found")
     return None
@@ -85,7 +82,7 @@ def verify(root: pathlib.Path) -> tuple[list[str], pathlib.Path | None, int]:
         description = fm.get("description", "")
         if not valid_skill_name(name):
             fail(errors, "SKILL.md frontmatter name violates Agent Skills naming constraints")
-        if skill_path.parent != root and name != skill_path.parent.name:
+        if name != skill_path.parent.name:
             fail(errors, "SKILL.md frontmatter name must match its parent skill directory")
         if not description.startswith("Use when"):
             fail(errors, "SKILL.md frontmatter description must start with 'Use when'")
