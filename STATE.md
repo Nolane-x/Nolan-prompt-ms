@@ -24,17 +24,18 @@ The repository exists to maximize **behavioral leverage per token** through one 
 
 > current truth → desired truth, preserving invariants, using the smallest sufficient verified delta.
 
-`SKILL.md` must remain broadly applicable, model-agnostic, and small enough to load cheaply.
+`verified-delta/SKILL.md` must remain broadly applicable, model-agnostic, and small enough to load cheaply.
 
 ## Observed Repository State
 
-- `SKILL.md` is the 446-word Verified Delta kernel.
+- Runtime skill entrypoint is `verified-delta/SKILL.md`; its frontmatter `name` matches the parent directory.
+- The Verified Delta kernel remains 446 words; the structural move did not alter its content.
 - `EVALS.md` defines seven pressure scenarios and four explicit behavioral gates.
 - `CONSTITUTION.md` defines sentence residency, compression, evidence, scope, and continuity laws.
-- `verify.py` deterministically checks required files, frontmatter, the 500-word ceiling, state/count drift, and false behavioral-gate closure.
-- `tests/test_verify.py` has five stdlib regression tests; the local RED run failed 5/5 before `verify.py`, and the local GREEN run passed 5/5 after it.
+- `verify.py` discovers a single skill entrypoint, validates nested name/directory agreement, frontmatter, the 500-word ceiling, state/count drift, and false behavioral-gate closure.
+- `tests/test_verify.py` includes deterministic coverage for valid nested packaging and name/directory mismatch in addition to the prior static invariants.
 - `.github/workflows/verify.yml` runs static checks on pushes and pull requests.
-- GitHub Actions run `34613227602` on `main@caf0411b13103833eaefd80c33ffae5ea4867c3b` completed successfully; both the unit-test step and `python verify.py` passed.
+- GitHub Actions previously proved the static verifier on `main`; the current structural branch must obtain its own GREEN run before merge.
 - No runtime dependency, model profile, prompt-template catalog, memory system, or multi-agent framework has been added.
 - No fresh isolated-agent RED/GREEN behavioral run has been completed yet.
 
@@ -69,7 +70,7 @@ Do not expand this repository into:
 ## Open Debts
 
 1. **RED behavioral baseline missing.** E1–E7 need fresh no-skill runs.
-2. **GREEN behavioral comparison missing.** The same scenarios need runs with `SKILL.md`.
+2. **GREEN behavioral comparison missing.** The same scenarios need runs with `verified-delta/SKILL.md`.
 3. **Wording micro-tests missing.** Competing phrasings need repeated fresh contexts.
 4. **Semantic ablation missing.** No core sentence has demonstrated behavioral necessity by removal.
 5. **Cross-domain holdout missing.** Coding, research, writing, and simple-task cases need unseen tests.
@@ -88,7 +89,7 @@ These debts block claims of behavioral verification or convergence.
 
 ## Next Best Action
 
-Run the **RED behavioral baseline** from `EVALS.md` in isolated fresh contexts without loading `SKILL.md`, recording exact failures and rationalizations.
+After the packaged-structure branch is GREEN and merged, run the **RED behavioral baseline** from `EVALS.md` in isolated fresh contexts without loading `verified-delta/SKILL.md`, recording exact failures and rationalizations.
 
 Only then alter the kernel. The first semantic edit must target a demonstrated failure; if no scenario fails, do not add guidance merely to make the skill look more complete.
 
