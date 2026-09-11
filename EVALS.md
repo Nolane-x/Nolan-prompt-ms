@@ -29,11 +29,13 @@ The public scenarios in this file are development probes, not final holdouts. Fi
 
 A result is meaningful only with its configuration. Every run record must bind:
 
-`task_id | task_hash | model/provider/snapshot | agent harness/version | skill blob SHA | description variant | tool set | reasoning/effort setting | sampling controls when available | time/token/resource limits | clean-environment id | grader/version | timestamp | trial id`
+`task_id | task_hash | model/provider/snapshot | agent harness/version | delivery form | skill blob SHA | description variant | available-skill-set hash | tool set | reasoning/effort setting | sampling controls when available | time/token/resource limits | clean-environment id | grader/version | timestamp | trial id`
 
 Compare control and candidate only under matched configurations. Randomize or counterbalance ordering when order can matter. A material configuration change starts a new comparison rather than silently extending an old one.
 
 Each trial begins from a clean state. Shared files, caches, git history, previous transcripts, or other trial residue invalidate independence unless they are intentionally part of the task.
+
+Do not pool results across agent harnesses as though harness were a nuisance variable. Skill discovery, retrieval, injection, context retention, and tool policy are part of the intervention and must be reported per harness before any cross-harness summary.
 
 ## Grading Contract
 
@@ -66,27 +68,95 @@ Also track:
 - no-op violation rate;
 - repeated-falsified-path rate;
 - authority/trust violations;
-- clarification errors: asking when safe inference was sufficient, or inferring when ambiguity was consequential.
+- clarification errors: asking when safe inference was sufficient, or inferring when ambiguity was consequential;
+- skill trigger precision/recall when discovery is under test;
+- post-trigger compliance and boundary violations;
+- incremental context/token cost relative to the matched control.
 
 Do not collapse these into one scalar until the component results are retained. A gain on one dimension does not erase a regression on another.
 
-## Gate A — Activation / Discovery
+## Gate A — Activation / Form-Factor
 
-A skill that works after loading but is loaded at the wrong times is not verified.
+A skill that works after forced loading but is not discovered reliably is not verified. A skill that is discovered reliably but adds no useful behavior is also not verified. A skill that should be active on nearly every representative task may be the wrong delivery form even if its text is good.
 
-Test discovery separately from post-load behavior using balanced **should-load / should-not-load** tasks. Include easy negatives, near-boundary negatives, paraphrases, and tasks where one trigger word appears but the failure risk is absent.
+Treat four questions as distinct:
+
+1. **Utility** — does the runtime content improve the target behavior when loading is guaranteed?
+2. **Trigger** — when progressive disclosure is used, does the harness retrieve the skill on the right tasks and avoid it on the wrong ones?
+3. **Compliance / Boundary** — after retrieval, does the agent use the guidance without violating task authority, scope, or opposing controls?
+4. **Form-factor fit** — is on-demand loading better than a smaller always-on instruction or no added guidance for the intended workload?
+
+### A1 — Utility Upper Bound
+
+Before optimizing metadata, compare matched trials under:
+
+- `U0`: no Verified Delta guidance;
+- `U1`: the current full skill body is force-loaded, bypassing discovery.
+
+`U1 - U0` estimates the best-case marginal utility of the current content under that harness. If forced loading does not produce a reproducible improvement on the failure families the skill claims to address, do not spend time tuning activation metadata to hide the deeper failure.
+
+Report cost together with benefit. A behavior gain purchased by large context overhead, extra tool calls, or new regressions is not automatically a win.
+
+### A2 — Trigger Under Progressive Disclosure
+
+Only after the utility upper bound is worth testing, evaluate normal discovery with balanced **should-load / should-not-load** tasks. Include:
+
+- clear positives;
+- paraphrased positives;
+- easy negatives;
+- near-boundary negatives;
+- lexical negatives containing trigger-like words without the target failure risk;
+- competing-skill or distractor-skill settings when the target harness normally exposes multiple skills.
+
+Use the same task set to compare the current description with genuinely different metadata forms. Natural-language descriptions are behavioral inputs, not passive labels; small wording changes can materially alter selection.
+
+Measure at least trigger precision, trigger recall, false-trigger rate, missed-trigger rate, and downstream task success **conditioned on whether the skill was actually retrieved**. Do not infer a trigger problem from end-task failure without checking the retrieval event.
+
+### A3 — Compliance and Boundary
+
+For trials where the skill was retrieved, separately score whether the agent:
+
+- follows the relevant guidance rather than merely mentioning it;
+- preserves user/higher-authority constraints;
+- does not apply caution, probing, verification, or minimal-change behavior where the paired control requires the opposite response;
+- does not shortcut from metadata alone while ignoring the loaded body.
+
+A high trigger rate with poor compliance is not an activation success. A high compliance rate achieved by triggering on everything is not a boundary success.
+
+### A4 — Form-Factor Test
+
+After RED/utility evidence identifies the behavior worth preserving, compare delivery forms on a representative workload rather than assuming “skill” is the correct abstraction:
+
+- `F0`: no added guidance;
+- `F1`: current discoverable on-demand skill;
+- `F2`: current skill force-loaded, used only as a diagnostic upper bound;
+- `F3`: a preregistered compact always-on candidate distilled from already-supported invariants.
+
+Do **not** author `F3` from holdout failures. Freeze its wording before the comparison and count its tokens on every task because always-on guidance pays context cost even when irrelevant.
+
+Interpretation:
+
+- `F2 > F1` with similar post-load behavior → discovery/trigger is a bottleneck;
+- `F2 ≈ F0` → the current content has little demonstrated marginal utility under that configuration;
+- `F3 > F1` on a workload where intended activation prevalence is high → the on-demand skill abstraction may be wrong;
+- `F1 > F3` with lower irrelevant-task cost → progressive disclosure is earning its complexity;
+- all guidance variants ≈ `F0` → prefer no additional instruction until a real failure justifies one.
+
+Do not invent a universal trigger-rate threshold. Pre-register the acceptance criterion from the intended workload, costs of false positives/negatives, and target harness. An activation claim is harness-scoped until replicated.
+
+### A5 — Description Study
 
 For each target runtime:
 
-1. freeze a balanced activation set before comparing descriptions;
-2. test the current metadata against genuinely different description variants;
-3. measure trigger recall, false-trigger rate, and downstream shortcut behavior;
-4. inspect whether metadata causes the agent to act from the description without reading the body;
-5. keep the shortest description that preserves the intended activation boundary.
+1. freeze the activation set before comparing descriptions;
+2. compare the current trigger-oriented metadata against variants that express **what the skill does + when it applies**, as recommended by the Agent Skills standard;
+3. include a shorter and a materially different variant rather than punctuation-only edits;
+4. measure selection and downstream behavior, not semantic similarity between descriptions;
+5. keep the shortest description on the Pareto frontier of useful trigger recall, false-trigger cost, and task outcome.
 
-Do not assume one ecosystem's description convention transfers to another. Record runtime-specific discovery behavior rather than encoding vendor folklore into the universal kernel.
+The repository's current `Use when...` and ≤500-character rules are project policies, not universal Agent Skills requirements. Agent Skills currently permits descriptions up to 1024 characters. Change these policies only if activation evidence supports the change.
 
-This gate closes only after the activation acceptance criterion is written **before** the run, the matched results are recorded, and the chosen metadata is justified by those results.
+This gate closes only after the intended delivery form, target harnesses, acceptance criteria, matched results, and activation costs are recorded. Metadata tuning alone cannot close it.
 
 ## Gate B — RED Baseline
 
@@ -123,6 +193,8 @@ For each behavior-changing sentence or independently meaningful clause:
 `full candidate → remove/replace one semantic unit → matched rerun`
 
 If removal does not worsen the target behavior across the relevant pressure cases, that unit has not earned core residency. Prefer deleting redundancy over inventing a new explanation for it.
+
+Single-unit leave-one-out is only the first pass. When units plausibly overlap or substitute for one another, test suspected pairs/groups and a shorter representative. Two individually silent removals do not prove both units are useless if either one can mask the absence of the other.
 
 Ablation must also test compression: compare materially shorter wording, not only deletion. Small prompt changes can change model behavior, so wording that merely sounds equivalent is not assumed equivalent.
 
@@ -332,6 +404,10 @@ Do not optimize one public probe until it passes by construction. New regression
 The evaluation contract is informed by external evidence, not treated as proof of this skill:
 
 - Agent Skills specification: discovery metadata describes what a skill does and when to use it; activation therefore needs its own measurement rather than being conflated with post-load behavior.
+- Han et al., *Skill-Use: Can LLMs Actually Use Skills in Agentic Harnesses?* (2026): separates Trigger, Compliance, and Boundary under progressive disclosure; skill-use capability changes materially with the agent harness.
+- Han et al., *SWE-Skills-Bench* (2026): most tested public SWE skills produced no pass-rate gain; some increased token cost substantially or degraded results, so skill injection must prove marginal utility rather than being presumed beneficial.
+- GitHub Copilot documentation (2026): use custom instructions for simple guidance relevant to almost every task and skills for detailed guidance that should load only when relevant; this motivates testing the delivery abstraction itself.
+- Faghih et al., *Tool Preferences in Agentic LLMs are Unreliable* (EMNLP 2025): natural-language descriptions can drastically alter selection frequency, motivating behavioral A/B tests of skill metadata.
 - Anthropic, *Demystifying evals for AI agents* (2026): tasks/trials/graders/transcripts/outcomes, isolated environments, multiple trials, `pass@k` and `pass^k`, transcript inspection.
 - Anthropic, *Quantifying infrastructure noise in agentic coding evals* (2026): runtime configuration is a material experimental variable.
 - Anthropic, *Eval awareness in Claude Opus 4.6's BrowseComp performance* (2026): public benchmarks can be contaminated or recognized by capable agents.
@@ -343,5 +419,6 @@ The evaluation contract is informed by external evidence, not treated as proof o
 - Razavi et al., *Benchmarking Prompt Sensitivity in Large Language Models* / PromptSET (2025): small prompt-formulation changes can materially alter performance.
 - Wen et al., *ComplexBench* (NeurIPS 2024) and Jiang et al., *FollowBench* (ACL 2024): evaluate individual constraints and compositions rather than relying on one undifferentiated quality score.
 - Chen et al., *Do NOT Think That Much for 2+3=?* (ICML 2025) and Zhou et al., *When More Thinking Hurts* (ACL Findings 2026): reasoning effort should scale with task difficulty rather than defaulting to maximum deliberation.
+- Semantic prompt-attribution work such as ProCut and joint attribution methods such as JoPA motivate interaction-aware ablation rather than assuming independent sentence effects.
 
-These sources motivate what to test. Only controlled runs on Verified Delta can establish whether its current wording actually improves behavior.
+These sources motivate what to test. Only controlled runs on Verified Delta can establish whether its current wording or delivery form actually improves behavior.
