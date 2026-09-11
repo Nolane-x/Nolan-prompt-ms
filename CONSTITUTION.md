@@ -1,6 +1,6 @@
 # Nolane Prompt MS Constitution
 
-`SKILL.md` governs task behavior. This file governs every future edit to the skill.
+`verified-delta/SKILL.md` governs task behavior. This file governs every future edit to the skill.
 
 ## Mission
 
@@ -16,7 +16,7 @@ Rule count, prose volume, model coverage, and apparent sophistication are not su
 
 “Research a million times for one word” is a quality bar, not a fabricated count. Never claim N reviews, runs, or iterations without recorded evidence.
 
-Every sentence in `SKILL.md` must earn residency through seven tests:
+Every sentence in `verified-delta/SKILL.md` must earn residency through seven tests:
 
 1. **Failure** — it addresses an observed or testable failure.
 2. **Delta** — changing or removing it can change behavior.
@@ -70,7 +70,7 @@ A new file requires a distinct loading or maintenance reason. “More organized�
 
 ## Size Pressure
 
-- `SKILL.md`: target **≤ 500 words**.
+- `verified-delta/SKILL.md`: target **≤ 500 words**.
 - Supporting runtime prose: add only when an eval proves progressive disclosure is needed.
 - Examples: one excellent example over a catalog.
 - Runtime dependencies: zero unless evaluation demonstrates otherwise.
