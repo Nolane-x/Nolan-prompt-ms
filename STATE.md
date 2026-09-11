@@ -29,52 +29,58 @@ The repository exists to maximize **behavioral leverage per token** through one 
 ## Observed Repository State
 
 - Runtime skill entrypoint is `verified-delta/SKILL.md`; its frontmatter `name` matches the parent directory.
-- The runtime package contains only `SKILL.md`; `verify.py` rejects additional support files until a future evaluation justifies relaxing that invariant.
-- The Verified Delta kernel remains 446 words and has not been behaviorally edited during structural hardening.
-- `EVALS.md` defines seven pressure scenarios and four explicit behavioral gates.
+- The runtime package contains only `SKILL.md`; `verify.py` rejects additional support files until evaluation justifies relaxing that invariant.
+- The Verified Delta kernel remains 446 words and has not been behaviorally edited during structural/evaluation hardening.
+- `EVALS.md` now separates public development probes from hidden holdouts and defines five gates: Activation, RED baseline, GREEN comparison, Ablation, and Cross-domain holdout.
+- Public development coverage is E1–E11, adding no-op/action bias, authority/trust, consequential ambiguity, context pressure, and paired opposing controls to the original E1–E7 failure families.
+- `EVALS.md` now requires matched experimental manifests, clean trials, outcome-first grading, component scores, repeated trials, transcript inspection, and contamination handling.
 - `CONSTITUTION.md` defines sentence residency, compression, evidence, scope, and continuity laws.
-- `verify.py` requires exactly one nested skill package and validates package purity, name/directory agreement, frontmatter, the 500-word ceiling, state/count drift, and false behavioral-gate closure.
-- `tests/test_verify.py` covers the deterministic repository invariants, including rejection of root skill entrypoints and unproven runtime support files.
-- `.github/workflows/verify.yml` runs static checks on pushes and pull requests.
-- Remote RED/GREEN evidence exists for the package-layout and runtime-purity verifier changes; these are static verifier results, not behavioral-agent evidence.
+- `verify.py` requires exactly one nested skill package, validates package purity/frontmatter/size/state consistency, and now refuses overall behavioral closure while Activation remains OPEN.
+- Remote TDD evidence exists for the Activation-gate verifier change: the test-only commit failed before the verifier knew about Activation, then the minimal verifier change passed.
+- `.github/workflows/verify.yml` runs deterministic checks on pushes and pull requests.
 - No runtime dependency, model profile, prompt-template catalog, memory system, or multi-agent framework has been added.
 - No fresh isolated-agent RED/GREEN behavioral run has been completed yet.
 
 Static invariant verification is not behavioral verification.
 
-## Source-Grounded Design Inputs
+## Source-Grounded Research Findings
 
-The kernel was distilled from the supplied Tề Hạ/QX research, not copied wholesale. Retained mechanisms are:
+External research currently supports the **questions and eval design**, not the runtime wording itself:
 
-- semantic precision and exact-constraint preservation;
-- objective/value invariance while policy may change;
-- fact/inference/assumption/unknown separation;
-- competing hypotheses only when uncertainty is material;
-- cheap high-information probes over prolonged speculation;
-- verification distinct from generation;
-- externalized continuation state with stale-state checks;
-- stopping and compute allocation based on decision value.
+- agent evals need isolated trials, multiple attempts, explicit graders, outcome checks, transcript review, and matched harness configuration;
+- infrastructure and resource configuration can move agentic benchmark scores enough to confound small deltas;
+- public benchmarks can be contaminated or recognized by capable tool-using agents, so final holdouts must stay unseen;
+- line-level prompt ablation can expose regressions that static review misses;
+- prompt formulation can materially change performance even when semantic intent appears similar;
+- coding agents show strong action bias on tasks where the correct delta is no code change;
+- complex-instruction benchmarks support grading individual constraints instead of hiding tradeoffs in one scalar;
+- overthinking research supports scaling deliberation to task difficulty rather than maximizing reasoning by default;
+- instruction-hierarchy research motivates testing retrieved/tool content as evidence with a trust level rather than assuming all text has equal authority.
 
-These mechanisms are research inputs, not proof that this implementation improves agents.
+These findings do not prove Verified Delta works; they define failures it must survive.
 
 ## Explicit Non-Goals
 
 Do not expand this repository into:
 
 - Prompt Master clone or tool-specific prompt router;
-- QX-AI implementation;
 - model/version catalog;
 - multi-agent orchestration framework;
 - memory platform;
-- large template/rule collection.
+- large template/rule collection;
+- public benchmark-answer repository.
 
 ## Open Debts
 
-1. **RED behavioral baseline missing.** E1–E7 need fresh no-skill runs.
-2. **GREEN behavioral comparison missing.** The same scenarios need runs with `verified-delta/SKILL.md`.
-3. **Wording micro-tests missing.** Competing phrasings need repeated fresh contexts.
-4. **Semantic ablation missing.** No core sentence has demonstrated behavioral necessity by removal.
-5. **Cross-domain holdout missing.** Coding, research, writing, and simple-task cases need unseen tests.
+1. **Activation behavior unmeasured.** The current trigger-only description needs balanced should-load/should-not-load tests and comparison against genuinely different metadata forms.
+2. **RED behavioral baseline missing.** E1–E11 need fresh no-skill trials; public probes are development tasks, not final holdouts.
+3. **GREEN behavioral comparison missing.** Matched runs with the unchanged 446-word kernel are required.
+4. **Wording micro-tests missing.** Competing phrasings need no-guidance controls, repeated fresh contexts, and manual transcript review.
+5. **Semantic ablation missing.** The tuple block, red flags, continuity, effort gate, and each independently meaningful operating clause have not proved residency by removal/compression.
+6. **Hidden cross-domain holdout missing.** Final holdout prompts must remain outside the public repository until evaluation is complete.
+7. **Compression hypothesis unresolved.** Because activation may be broad, test whether materially shorter kernels preserve behavior; do not assume 446 words are necessary or that an arbitrary smaller target is better.
+8. **Frontmatter policy is partly project-specific.** Agent Skills permits descriptions up to 1024 characters and recommends describing what+when; this repo currently enforces ≤500 and `Use when...`. Resolve by activation evidence before changing either policy.
+9. **Runtime distribution behavior is unmeasured.** Generic Agent Skills packaging and product-specific auto-discovery layouts are distinct; do not duplicate vendor directories until an intended deployment path requires it.
 
 These debts block claims of behavioral verification or convergence.
 
@@ -88,12 +94,14 @@ These debts block claims of behavioral verification or convergence.
 - Preserving old state without checking current reality.
 - Adding prose for constraints a deterministic verifier can enforce.
 - Adding runtime support files before evaluation proves progressive disclosure is needed.
+- Treating public E1–E11 as an unseen holdout.
+- Changing the runtime because external research merely sounds compatible with it.
 
 ## Next Best Action
 
-After the runtime-purity branch is GREEN and merged, run the **RED behavioral baseline** from `EVALS.md` in isolated fresh contexts without loading `verified-delta/SKILL.md`, recording exact failures and rationalizations.
+Obtain a **fresh isolated-agent harness** and run the Activation study plus RED baselines before changing `verified-delta/SKILL.md`.
 
-Only then alter the kernel. The first semantic edit must target a demonstrated failure; if no scenario fails, do not add guidance merely to make the skill look more complete.
+If an isolated harness is unavailable, stop at the evidence boundary. Do not substitute this already-exposed session for a clean control, because it has read the skill, its evals, and the research hypotheses.
 
 ## Update Rule
 
