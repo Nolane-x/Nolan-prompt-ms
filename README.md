@@ -17,9 +17,12 @@ Nolane Prompt MS takes the opposite approach: compress research into a small ker
 | File | Responsibility |
 |---|---|
 | `SKILL.md` | Runtime behavior loaded by an agent |
-| `EVALS.md` | RED/GREEN pressure scenarios and scoring |
+| `EVALS.md` | RED/GREEN pressure scenarios, gates, and scoring |
 | `CONSTITUTION.md` | Laws for editing, compressing, and validating the skill |
 | `STATE.md` | Minimal cross-session boot state and open research debt |
+| `verify.py` | Deterministic invariant checker; Python stdlib only |
+| `tests/test_verify.py` | Regression tests for the deterministic checker |
+| `.github/workflows/verify.yml` | Runs static checks on push and pull request |
 
 No source document is copied into runtime context. Research is distilled only when a mechanism survives the repository's residency rules.
 
@@ -27,7 +30,7 @@ No source document is copied into runtime context. Research is distilled only wh
 
 **Alpha. Behavioral verification is still open.**
 
-The first kernel is 446 words and has no dependencies, scripts, model profiles, or tool-specific templates. `EVALS.md` defines the required baseline and comparison tests, but fresh isolated RED/GREEN runs have not yet been completed.
+The runtime kernel remains 446 words with no runtime dependencies, model profiles, or tool-specific templates. A deterministic verification layer now guards mechanical invariants, but it does **not** substitute for isolated-agent RED/GREEN behavioral evaluation.
 
 Do not describe this version as proven, best, converged, or behaviorally verified.
 
@@ -37,12 +40,13 @@ Before changing the skill:
 
 1. read `CONSTITUTION.md` and `STATE.md`;
 2. inspect current repository reality;
-3. identify one demonstrated failure;
-4. test a minimal wording change;
-5. ablate it;
-6. keep it only if behavior worsens without it;
-7. update `STATE.md`;
-8. stop.
+3. run `python verify.py`;
+4. identify one demonstrated behavioral failure;
+5. test a minimal wording change;
+6. ablate it;
+7. keep it only if behavior worsens without it;
+8. update `STATE.md` and rerun the verifier;
+9. stop.
 
 “Research a million times for one word” is treated as a **quality standard**, never as a fabricated iteration count.
 
