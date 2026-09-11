@@ -12,8 +12,9 @@ A fresh session that will modify this repository must:
 1. read `CONSTITUTION.md`;
 2. read `STATE.md`;
 3. inspect the current repository and recent changes;
-4. re-check every stored claim that could have gone stale;
-5. continue from the next evidence-producing action, not from old prose momentum.
+4. run `python verify.py`;
+5. re-check every stored claim that could have gone stale;
+6. continue from the next evidence-producing action, not from old prose momentum.
 
 Past-self state is a recovery aid, never authority.
 
@@ -27,26 +28,31 @@ The repository exists to maximize **behavioral leverage per token** through one 
 
 ## Observed Repository State
 
-- `EVALS.md` exists and defines seven pressure scenarios plus the comparison protocol.
-- `SKILL.md` exists as the first 446-word Verified Delta kernel.
+- `SKILL.md` is the 446-word Verified Delta kernel.
+- `EVALS.md` defines seven pressure scenarios and four explicit behavioral gates.
 - `CONSTITUTION.md` defines sentence residency, compression, evidence, scope, and continuity laws.
-- No scripts, dependencies, model profiles, prompt templates, or runtime framework have been added.
-- No fresh isolated-agent RED/GREEN run has been completed in this repository yet.
+- `verify.py` deterministically checks required files, frontmatter, the 500-word ceiling, state/count drift, and false behavioral-gate closure.
+- `tests/test_verify.py` has five stdlib regression tests; the local RED run failed 5/5 before `verify.py`, and the local GREEN run passed 5/5 after it.
+- `.github/workflows/verify.yml` is configured to run those checks on pushes and pull requests; no remote workflow run had been observed at the moment this state was written.
+- No runtime dependency, model profile, prompt-template catalog, memory system, or multi-agent framework has been added.
+- No fresh isolated-agent RED/GREEN behavioral run has been completed yet.
+
+Static invariant verification is not behavioral verification.
 
 ## Source-Grounded Design Inputs
 
-The current kernel was distilled from two supplied research documents, not copied wholesale. The retained mechanisms are:
+The kernel was distilled from the supplied Tề Hạ/QX research, not copied wholesale. Retained mechanisms are:
 
-- semantic precision and preservation of exact constraints;
+- semantic precision and exact-constraint preservation;
 - objective/value invariance while policy may change;
 - fact/inference/assumption/unknown separation;
 - competing hypotheses only when uncertainty is material;
 - cheap high-information probes over prolonged speculation;
 - verification distinct from generation;
 - externalized continuation state with stale-state checks;
-- stopping and compute allocation based on actual decision value.
+- stopping and compute allocation based on decision value.
 
-These mechanisms are inputs to research, not proof that this implementation improves agents.
+These mechanisms are research inputs, not proof that this implementation improves agents.
 
 ## Explicit Non-Goals
 
@@ -61,11 +67,12 @@ Do not expand this repository into:
 
 ## Open Debts
 
-1. **RED baseline missing.** E1–E7 need fresh no-skill runs.
-2. **GREEN comparison missing.** The same scenarios need runs with `SKILL.md`.
-3. **Wording micro-tests missing.** Competing phrasings have not been tested with repeated fresh contexts.
-4. **Ablation missing.** No core sentence has yet demonstrated behavioral necessity by removal.
+1. **RED behavioral baseline missing.** E1–E7 need fresh no-skill runs.
+2. **GREEN behavioral comparison missing.** The same scenarios need runs with `SKILL.md`.
+3. **Wording micro-tests missing.** Competing phrasings need repeated fresh contexts.
+4. **Semantic ablation missing.** No core sentence has demonstrated behavioral necessity by removal.
 5. **Cross-domain holdout missing.** Coding, research, writing, and simple-task cases need unseen tests.
+6. **Remote CI observation pending.** Confirm at least one GitHub workflow run before calling the static gate remotely exercised.
 
 These debts block claims of behavioral verification or convergence.
 
@@ -77,13 +84,14 @@ These debts block claims of behavioral verification or convergence.
 - Deep reasoning on every task.
 - Multi-agent by default.
 - Preserving old state without checking current reality.
+- Adding prose for constraints a deterministic verifier can enforce.
 
 ## Next Best Action
 
-Run the **RED baseline** from `EVALS.md` in isolated fresh contexts without loading `SKILL.md`. Record exact failures and rationalizations.
+First confirm the remote static workflow executes successfully. Then run the **RED behavioral baseline** from `EVALS.md` in isolated fresh contexts without loading `SKILL.md`, recording exact failures and rationalizations.
 
-Only then alter the kernel. The first edit should target a demonstrated failure; if no scenario fails, do not add guidance merely to make the skill look more complete.
+Only then alter the kernel. The first semantic edit must target a demonstrated failure; if no scenario fails, do not add guidance merely to make the skill look more complete.
 
 ## Update Rule
 
-After meaningful work, replace stale state here. Keep this file short. Preserve only current invariants, observed state, open debts, rejected paths that prevent repetition, and the next evidence-producing action.
+After meaningful work, replace stale state here. Keep only current invariants, observed state, open debts, rejected paths that prevent repetition, and the next evidence-producing action.
