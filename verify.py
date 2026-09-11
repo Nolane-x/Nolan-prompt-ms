@@ -7,7 +7,7 @@ import pathlib
 import re
 import sys
 
-REQUIRED = ("SKILL.md", "CONSTITUTION.md", "EVALS.md", "STATE.md", "README.md")
+REQUIRED_ROOT = ("CONSTITUTION.md", "EVALS.md", "STATE.md", "README.md")
 MAX_SKILL_WORDS = 500
 
 
@@ -45,16 +45,35 @@ def valid_skill_name(name: str) -> bool:
     )
 
 
-def verify(root: pathlib.Path) -> list[str]:
+def find_skill(root: pathlib.Path, errors: list[str]) -> pathlib.Path | None:
+    legacy = root / "SKILL.md"
+    nested = sorted(path for path in root.glob("*/SKILL.md") if path.is_file())
+    if legacy.is_file():
+        if nested:
+            fail(errors, "multiple skill entrypoints found: root SKILL.md and nested SKILL.md")
+            return None
+        return legacy
+    if len(nested) == 1:
+        return nested[0]
+    if not nested:
+        fail(errors, "missing skill entrypoint: expected SKILL.md or exactly one */SKILL.md")
+    else:
+        fail(errors, "multiple nested skill entrypoints found")
+    return None
+
+
+def verify(root: pathlib.Path) -> tuple[list[str], pathlib.Path | None, int]:
     errors: list[str] = []
 
-    for required_name in REQUIRED:
+    for required_name in REQUIRED_ROOT:
         if not (root / required_name).is_file():
             fail(errors, f"missing required file: {required_name}")
-    if errors:
-        return errors
 
-    skill = (root / "SKILL.md").read_text(encoding="utf-8")
+    skill_path = find_skill(root, errors)
+    if errors or skill_path is None:
+        return errors, skill_path, 0
+
+    skill = skill_path.read_text(encoding="utf-8")
     state = (root / "STATE.md").read_text(encoding="utf-8")
     evals = (root / "EVALS.md").read_text(encoding="utf-8")
 
@@ -66,6 +85,8 @@ def verify(root: pathlib.Path) -> list[str]:
         description = fm.get("description", "")
         if not valid_skill_name(name):
             fail(errors, "SKILL.md frontmatter name violates Agent Skills naming constraints")
+        if skill_path.parent != root and name != skill_path.parent.name:
+            fail(errors, "SKILL.md frontmatter name must match its parent skill directory")
         if not description.startswith("Use when"):
             fail(errors, "SKILL.md frontmatter description must start with 'Use when'")
         if len(description) > 500:
@@ -92,19 +113,21 @@ def verify(root: pathlib.Path) -> list[str]:
         open_gates = ", ".join(label for label, value in eval_gates.items() if value != "CLOSED")
         fail(errors, f"Behavioral verification gate is CLOSED while eval gates remain OPEN: {open_gates}")
 
-    return errors
+    return errors, skill_path, words
 
 
 def main(argv: list[str]) -> int:
     root = pathlib.Path(argv[1] if len(argv) > 1 else ".").resolve()
-    errors = verify(root)
+    errors, skill_path, words = verify(root)
     if errors:
         print("FAIL")
         for error in errors:
             print(f"- {error}")
         return 1
+    assert skill_path is not None
     print("PASS")
-    print(f"- SKILL.md words: {len((root / 'SKILL.md').read_text(encoding='utf-8').split())}/{MAX_SKILL_WORDS}")
+    print(f"- skill: {skill_path.relative_to(root)}")
+    print(f"- SKILL.md words: {words}/{MAX_SKILL_WORDS}")
     return 0
 
 
