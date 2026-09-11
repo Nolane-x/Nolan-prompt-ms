@@ -24,47 +24,67 @@ The repository exists to maximize **behavioral leverage per token** through one 
 
 > current truth → desired truth, preserving invariants, using the smallest sufficient verified delta.
 
-`verified-delta/SKILL.md` must remain broadly applicable, model-agnostic, and small enough to load cheaply.
+The primitive is the target. **A skill is only one possible delivery mechanism.** `verified-delta/SKILL.md` must not be protected as a form factor if evidence shows that no guidance, a smaller always-on instruction, or another delivery mechanism produces a better cost/behavior tradeoff.
 
 ## Observed Repository State
 
 - Runtime skill entrypoint is `verified-delta/SKILL.md`; its frontmatter `name` matches the parent directory.
 - The runtime package contains only `SKILL.md`; `verify.py` rejects additional support files until evaluation justifies relaxing that invariant.
 - The Verified Delta kernel remains 446 words and has not been behaviorally edited during structural/evaluation hardening.
-- `EVALS.md` separates public development probes from hidden holdouts and defines five gates: Activation, RED baseline, GREEN comparison, Ablation, and Cross-domain holdout.
-- Public development coverage is now E1–E13. E12 directly pressures the high-impact/irreversible branch of the Effort Gate; E13 directly pressures the final “return to the first invalid transition boundary” rule.
-- `EVALS.md` contains a semantic coverage map linking each independently meaningful runtime unit to pressure cases. This map is a coverage hypothesis only; it is not evidence that the unit changes behavior or deserves residency.
-- E3 now contains an explicit-vs-inferable authorization-boundary validity pair so the eval can detect declaration matching instead of genuine scope inference.
-- E4 now tests whether internal tuple notation stays internal when exposing it adds no value.
-- E10 now grades both final correctness and clarification efficiency rather than rewarding questions unconditionally.
-- `EVALS.md` requires matched experimental manifests, clean trials, outcome-first grading, component scores, repeated trials, transcript inspection, paired controls, and contamination handling.
+- `EVALS.md` defines five gates: Activation, RED baseline, GREEN comparison, Ablation, and Cross-domain holdout.
+- Activation now decomposes **Utility**, **Trigger**, **Compliance/Boundary**, and **Form-factor fit** instead of treating “skill present” as one intervention.
+- The diagnostic ladder is `no guidance → forced-load current skill → discoverable current skill`; a preregistered compact always-on candidate is compared only after RED/utility evidence identifies behavior worth preserving.
+- Activation uses two populations: a balanced diagnostic set for under/over-trigger analysis and a representative workload sample for natural prevalence, total cost, and form-factor choice. These populations answer different questions and must not be substituted for one another.
+- Metadata or wording selected on development cases must be frozen and checked on fresh selection-validation cases before a final holdout claim.
+- Repeated trials estimate stochastic reliability within a task; they do not count as additional independent tasks. Candidate/control analysis must preserve task pairing and uncertainty rather than inflating sample size with repeated runs.
+- Activation results are harness-scoped. The experimental manifest records delivery form and available-skill-set hash in addition to model/harness/tool/resource variables.
+- Public development coverage is E1–E13 with a semantic coverage map. E12 pressures irreversible/high-impact actions; E13 pressures the first-invalid-transition-boundary rule.
+- Semantic coverage remains a test-planning hypothesis, not sentence-residency evidence.
+- `EVALS.md` requires clean trials, outcome-first grading, component scores, repeated trials, transcript inspection, paired controls, contamination handling, selection-validation, and interaction-aware ablation.
 - `CONSTITUTION.md` defines sentence residency, compression, evidence, scope, and continuity laws.
 - `verify.py` requires exactly one nested skill package, validates package purity/frontmatter/size/state consistency, and refuses overall behavioral closure while Activation remains OPEN.
-- Remote TDD evidence exists for the Activation-gate verifier change: the test-only commit failed before the verifier knew about Activation, then the minimal verifier change passed.
 - `.github/workflows/verify.yml` runs deterministic checks on pushes and pull requests.
 - No runtime dependency, model profile, prompt-template catalog, memory system, or multi-agent framework has been added.
 - No fresh isolated-agent RED/GREEN behavioral run has been completed yet.
 
-Static invariant verification and semantic coverage planning are not behavioral verification.
+Static invariant verification, semantic coverage planning, and external benchmark results are not behavioral verification of Verified Delta.
 
 ## Source-Grounded Research Findings
 
 External research currently supports the **questions and eval design**, not the runtime wording itself:
 
-- agent evals need isolated trials, multiple attempts, explicit graders, outcome checks, transcript review, and matched harness configuration;
+- *Skill-Use* (2026) separates Trigger, Compliance, and Boundary and reports strong harness dependence; skill use is not a model-only capability.
+- *SWE-Skills-Bench* (2026) finds that most evaluated public SWE skills deliver no pass-rate improvement, some add large token overhead without gain, and some degrade performance. “Having a skill” therefore has no prior entitlement to be useful.
+- GitHub's current Copilot guidance recommends custom instructions for simple guidance relevant to almost every task and skills for detailed guidance that should load only when relevant. This makes delivery form an empirical question for a broad primitive like Verified Delta.
+- Natural-language tool/skill descriptions are behaviorally active selection inputs; description edits can strongly change selection frequency, so activation metadata needs behavioral A/B tests rather than semantic review alone.
+- Agent Skills recommends that `description` express both what a skill does and when to use it; the current Verified Delta description is primarily trigger-oriented. Whether adding “what” improves discovery without over-triggering is unmeasured.
+- Agent Skills currently permits descriptions up to 1024 characters; the repository's ≤500 and `Use when...` constraints are project policies, not universal spec requirements.
+- GitHub Copilot project skill discovery uses `.github/skills`, `.claude/skills`, or `.agents/skills`; a generic distributable skill directory and a product auto-discovery installation path are not the same thing.
+- balanced capability tests are useful for exposing both directions of behavior, but deployment prevalence must be estimated from a representative workload rather than inferred from an artificially balanced set;
+- repeated adaptive selection on the same eval can produce winner's-curse optimism, so wording/metadata selection needs fresh validation before final holdout reporting;
+- repeated stochastic trials on one task estimate reliability but remain correlated by task, so task-level pairing and uncertainty must be retained;
+- agent evals need isolated trials, explicit graders, outcome checks, transcript review, and matched harness configuration;
 - infrastructure and resource configuration can move agentic benchmark scores enough to confound small deltas;
 - public benchmarks can be contaminated or recognized by capable tool-using agents, so final holdouts must stay unseen;
-- line-level prompt ablation can expose regressions that static review misses;
-- prompt-attribution research shows that semantic prompt units can have joint/combinatorial effects, so leave-one-out removal alone is insufficient when two units may substitute for or interact with one another;
-- prompt formulation can materially change performance even when semantic intent appears similar;
+- semantic prompt units can have joint/combinatorial effects, so leave-one-out removal alone is insufficient when units substitute or interact;
 - coding agents show strong action bias on tasks where the correct delta is no code change;
 - scope evaluations can become artificially easy when authorization boundaries are explicitly declared instead of inferred;
 - clarification quality includes deciding when a question is decision-relevant, not merely generating more questions;
-- complex-instruction benchmarks support grading individual constraints instead of hiding tradeoffs in one scalar;
 - overthinking research supports scaling deliberation to task difficulty rather than maximizing reasoning by default;
 - instruction-hierarchy research motivates testing retrieved/tool content as evidence with a trust level rather than assuming all text has equal authority.
 
-These findings do not prove Verified Delta works; they define failures and attribution traps it must survive.
+These findings do not prove Verified Delta works; they define failures, delivery risks, and attribution traps it must survive.
+
+## Form-Factor Hypotheses
+
+Keep all four live until data eliminates them:
+
+1. **On-demand skill is correct.** The behavior is valuable on a selective subset of tasks and progressive disclosure beats always-on context cost.
+2. **Compact always-on core + optional skill is correct.** A few invariants are broadly useful, while detailed procedure remains selective.
+3. **Always-on instruction is correct.** Intended activation prevalence is so high that retrieval complexity is wasted and the compact always-on candidate dominates.
+4. **No added guidance is correct.** Modern models/harnesses already exhibit the target behavior often enough that Verified Delta adds negligible marginal utility or causes regressions.
+
+Do not rank these by preference. The experiment decides.
 
 ## Explicit Non-Goals
 
@@ -75,20 +95,25 @@ Do not expand this repository into:
 - multi-agent orchestration framework;
 - memory platform;
 - large template/rule collection;
-- public benchmark-answer repository.
+- public benchmark-answer repository;
+- vendor-specific directory duplication without a concrete deployment target.
 
 ## Open Debts
 
-1. **Activation behavior unmeasured.** The current trigger-only description needs balanced should-load/should-not-load tests and comparison against genuinely different metadata forms.
-2. **RED behavioral baseline missing.** E1–E13 need fresh no-skill trials; public probes are development tasks, not final holdouts.
-3. **GREEN behavioral comparison missing.** Matched runs with the unchanged 446-word kernel are required.
-4. **Wording micro-tests missing.** Competing phrasings need no-guidance controls, repeated fresh contexts, and manual transcript review.
-5. **Semantic ablation unexecuted.** Runtime units now have planned pressure coverage, but no unit has proved residency by removal/compression. Use single-unit ablation first, then test suspected overlapping pairs/groups before declaring independently silent units redundant; two units can each look unnecessary when the other substitutes for it. If a mapped probe does not discriminate the unit during RED/ablation, revise the coverage claim rather than counting success.
-6. **Hidden cross-domain holdout missing.** Final holdout prompts must remain outside the public repository until evaluation is complete.
-7. **Compression hypothesis unresolved.** Because activation may be broad, test whether materially shorter kernels preserve behavior; do not assume 446 words are necessary or that an arbitrary smaller target is better.
-8. **Frontmatter policy is partly project-specific.** Agent Skills permits descriptions up to 1024 characters and recommends describing what+when; this repo currently enforces ≤500 and `Use when...`. Resolve by activation evidence before changing either policy.
-9. **Runtime distribution behavior is unmeasured.** Generic Agent Skills packaging and product-specific auto-discovery layouts are distinct; do not duplicate vendor directories until an intended deployment path requires it.
-10. **Coverage adequacy is unvalidated.** E1–E13 are hypotheses about causal failure families. A scenario that cannot distinguish the semantic unit it is mapped to must be split, replaced, or removed.
+1. **Utility upper bound unmeasured.** Compare no guidance with force-loaded current skill before spending effort on metadata optimization.
+2. **Activation behavior unmeasured.** Progressive-disclosure Trigger, Compliance, and Boundary need balanced positives/negatives plus realistic distractor-skill conditions.
+3. **Natural activation prevalence unmeasured.** Form-factor decisions require a representative workload sample; a balanced trigger benchmark is not a prevalence estimate.
+4. **Form-factor fit unmeasured.** Compare discoverable skill against no guidance and a preregistered compact always-on candidate on a representative workload. Do not write the compact candidate from holdout failures.
+5. **Selection optimism unmeasured.** Wording/metadata chosen on development cases needs fresh selection-validation before final holdout use.
+6. **RED behavioral baseline missing.** E1–E13 need fresh no-guidance trials; public probes are development tasks, not final holdouts.
+7. **GREEN behavioral comparison missing.** Matched runs with the unchanged 446-word kernel are required.
+8. **Wording micro-tests missing.** Competing phrasings need no-guidance controls, repeated fresh contexts, and manual transcript review.
+9. **Semantic ablation unexecuted.** Use single-unit ablation first, then suspected overlapping pairs/groups before declaring silent units redundant.
+10. **Hidden cross-domain holdout missing.** Final holdout prompts must remain outside the public repository until evaluation is complete.
+11. **Compression hypothesis unresolved.** Test materially shorter kernels; do not assume 446 words are necessary or that an arbitrary smaller target is better.
+12. **Frontmatter policy is partly project-specific.** Resolve `Use when...` and ≤500 policy by activation evidence rather than calling either a universal requirement.
+13. **Runtime portability unmeasured.** Any skill-use claim is harness-scoped until replicated. Distribution/install paths must be treated separately from the canonical source package.
+14. **Coverage adequacy is unvalidated.** A public probe that cannot discriminate the semantic unit mapped to it must be split, replaced, or removed.
 
 These debts block claims of behavioral verification or convergence.
 
@@ -105,13 +130,21 @@ These debts block claims of behavioral verification or convergence.
 - Treating public E1–E13 as an unseen holdout.
 - Treating a semantic coverage table as proof that a sentence works.
 - Treating two individually silent ablations as proof both units are useless without checking interaction/redundancy.
-- Changing the runtime because external research merely sounds compatible with it.
+- Optimizing the skill description before proving force-loaded content has marginal utility.
+- Treating a balanced activation benchmark as evidence of real-world activation prevalence.
+- Reporting the best score on the same benchmark repeatedly used to choose wording as fresh evidence.
+- Counting repeated stochastic trials on one task as independent task diversity.
+- Assuming “skill” is the correct abstraction because the project began as a skill.
+- Copying the same skill into every vendor-specific auto-discovery directory before choosing a deployment target.
+- Changing runtime wording because external research merely sounds compatible with it.
 
 ## Next Best Action
 
-Obtain a **fresh isolated-agent harness** and run the Activation study plus RED baselines before changing `verified-delta/SKILL.md`.
+Obtain a **fresh isolated-agent harness** and execute the diagnostic ladder in this order:
 
-Start RED with paired cases that can falsify both directions of each rule: act/no-op, narrow/wider scope, infer/clarify, low/high effort, continue/restart. Then use those failures to decide which semantic units actually deserve ablation priority.
+`U0 no guidance → U1 forced-load current skill → A2 progressive disclosure on balanced diagnostics → validate selected metadata on fresh cases → F0/F1/F2/F3 on a representative workload only if U1 demonstrates useful behavior`
+
+Run RED with paired cases that falsify both directions of each rule: act/no-op, narrow/wider scope, infer/clarify, low/high effort, continue/restart. Record Trigger, Compliance, Boundary, outcome, cost, per-task reliability, and uncertainty separately.
 
 If an isolated harness is unavailable, stop at the evidence boundary. Do not substitute this already-exposed session for a clean control, because it has read the skill, its evals, and the research hypotheses.
 
