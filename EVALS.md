@@ -32,13 +32,15 @@ Do not report the best score on the same cases repeatedly used to choose wording
 
 A result is meaningful only with its configuration. Every run record must bind:
 
-`task_id | task_hash | model/provider/snapshot | agent harness/version | delivery form | skill blob SHA | description variant | available-skill-set hash | tool set | reasoning/effort setting | sampling controls when available | time/token/resource limits | clean-environment id | grader/version | timestamp | trial id`
+`task_id | task_hash | prompt language | metadata language | body language | model/provider/snapshot | agent harness/version | delivery form | skill blob SHA | description variant | available-skill-set hash | tool set | reasoning/effort setting | sampling controls when available | time/token/resource limits | clean-environment id | grader/version | timestamp | trial id`
 
 Compare control and candidate only under matched configurations. Randomize or counterbalance ordering when order can matter. A material configuration change starts a new comparison rather than silently extending an old one.
 
 Each trial begins from a clean state. Shared files, caches, git history, previous transcripts, or other trial residue invalidate independence unless they are intentionally part of the task.
 
 Do not pool results across agent harnesses as though harness were a nuisance variable. Skill discovery, retrieval, injection, context retention, and tool policy are part of the intervention and must be reported per harness before any cross-harness summary.
+
+Do not pool languages into one “multilingual” score before reporting per-language results. Prompt language, metadata language, and body language are separate intervention variables.
 
 Repeated stochastic trials on one task estimate that task's reliability; they do not create the same evidence as additional independent tasks. Keep the task as the primary paired unit when comparing variants, retain per-task results, and report uncertainty rather than treating every trial as an independent benchmark item. There is no universal trial count: pre-register the decision, smallest practically meaningful difference, serious-failure tolerance, maximum budget, and stopping rule before looking at the candidate result.
 
@@ -173,7 +175,26 @@ For each target runtime:
 
 The repository's current `Use when...` and ≤500-character rules are project policies, not universal Agent Skills requirements. Agent Skills currently permits descriptions up to 1024 characters. Change these policies only if activation evidence supports the change.
 
-This gate closes only after the intended delivery form, target harnesses, acceptance criteria, matched results, validation behavior, and activation costs are recorded. Metadata tuning alone cannot close it.
+### A6 — Cross-Lingual Activation
+
+A model's ability to understand a user language does not prove that skill discovery or post-load compliance is language-robust. Test language as a separate variable whenever the intended deployment includes non-English users.
+
+Construct semantically matched task pairs across the target languages. A translated case must preserve the same objective, ambiguity, authority boundary, reversible/irreversible status, and grading contract; translation artifacts are task defects, not model failures. Include code-mixed prompts when they occur in the intended workload.
+
+Disentangle the interventions instead of localizing everything at once:
+
+- `L0`: English prompt + current English metadata/body;
+- `L1`: target-language prompt + current English metadata/body — measures cross-lingual retrieval/compliance of the deployed package;
+- `L2`: target-language prompt + preregistered localized metadata + unchanged English body — isolates metadata localization primarily at Trigger;
+- `L3`: target-language prompt + localized metadata/body — tests full localization only if earlier stages show a real gap worth fixing.
+
+For each stage, record Trigger separately from post-trigger Compliance/Boundary and end-task outcome. A missed skill and a correctly triggered skill that is then followed badly are different failures.
+
+Do not translate code identifiers, required tool arguments, or other language-invariant execution tokens merely to make prose locally natural. Where a task depends on such invariants, grade them separately from natural-language quality.
+
+Report every tested language separately. “Multilingual” is not a transferable property of the skill, model, or harness without measured coverage. Do not add multilingual metadata or duplicate localized runtime packages until a target-language gap is observed and localization wins a matched comparison.
+
+This gate closes only after the intended delivery form, target harnesses, target languages, acceptance criteria, matched results, validation behavior, and activation costs are recorded. Metadata tuning alone cannot close it.
 
 ## Gate B — RED Baseline
 
@@ -221,7 +242,9 @@ Freeze the candidate before revealing holdout tasks. The holdout must contain un
 
 Public E1–E13 are forbidden as final holdout items. Do not search the web or repository for hidden-task answers during a holdout run. If a task or answer leaks, mark it contaminated rather than counting the result.
 
-A holdout claim must report the tested model/harness/configuration. Generalization to untested runtimes or models remains unknown.
+If a claim includes multilingual robustness, the frozen holdout must also include the claimed target languages without changing the delivery package after seeing their outcomes.
+
+A holdout claim must report the tested model/harness/configuration and language. Generalization to untested runtimes, models, domains, or languages remains unknown.
 
 ## Semantic Coverage Map
 
@@ -414,7 +437,7 @@ Micro-tests select wording; they do not replace pressure scenarios or hidden hol
 
 Every semantic unit admitted because of a demonstrated failure keeps that failure family as a permanent regression case. Remove a regression only when the protected behavior is intentionally removed from the skill.
 
-Do not optimize one public probe until it passes by construction. New regression instances should vary surface wording, domain, and pressure while preserving the causal failure.
+Do not optimize one public probe until it passes by construction. New regression instances should vary surface wording, domain, pressure, and—when language robustness is claimed—language, while preserving the causal failure.
 
 ## Research Basis
 
@@ -425,6 +448,9 @@ The evaluation contract is informed by external evidence, not treated as proof o
 - Han et al., *SWE-Skills-Bench* (2026): most tested public SWE skills produced no pass-rate gain; some increased token cost substantially or degraded results, so skill injection must prove marginal utility rather than being presumed beneficial.
 - GitHub Copilot documentation (2026): use custom instructions for simple guidance relevant to almost every task and skills for detailed guidance that should load only when relevant; this motivates testing the delivery abstraction itself.
 - Faghih et al., *Tool Preferences in Agentic LLMs are Unreliable* (EMNLP 2025): natural-language descriptions can drastically alter selection frequency, motivating behavioral A/B tests of skill metadata.
+- Kulkarni et al., *MASSIVE-Agents* (EMNLP Findings 2025): function-calling accuracy varies strongly across 52 languages, motivating language-scoped activation claims rather than assuming English performance transfers.
+- Luo et al., *Lost in Execution: On the Multilingual Robustness of Tool Calling in Large Language Models* (ACL 2026): multilingual failures can occur even when intent and tool choice are correct, motivating separation of Trigger from post-trigger execution/compliance.
+- TUCAN (2026): non-English function-calling remains a distinct evaluation problem and benefits from repeated, language-specific measurement.
 - Anthropic, *Demystifying evals for AI agents* (2026): tasks/trials/graders/transcripts/outcomes, isolated environments, repeated trials, balanced behavior/opposing controls, and transcript inspection.
 - Xu et al., *Towards Reliable LLM Evaluation: Correcting the Winner's Curse in Adaptive Benchmarking* (2026): repeated adaptive selection on the same benchmark can make the winner's reported score optimistic; freeze selected procedures and use fresh evaluation data for inference.
 - Anthropic, *Quantifying infrastructure noise in agentic coding evals* (2026): runtime configuration is a material experimental variable.
@@ -439,4 +465,4 @@ The evaluation contract is informed by external evidence, not treated as proof o
 - Chen et al., *Do NOT Think That Much for 2+3=?* (ICML 2025) and Zhou et al., *When More Thinking Hurts* (ACL Findings 2026): reasoning effort should scale with task difficulty rather than defaulting to maximum deliberation.
 - Semantic prompt-attribution work such as ProCut and joint attribution methods such as JoPA motivate interaction-aware ablation rather than assuming independent sentence effects.
 
-These sources motivate what to test. Only controlled runs on Verified Delta can establish whether its current wording or delivery form actually improves behavior.
+These sources motivate what to test. Only controlled runs on Verified Delta can establish whether its current wording, language behavior, or delivery form actually improves behavior.
