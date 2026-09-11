@@ -70,6 +70,11 @@ def verify(root: pathlib.Path) -> tuple[list[str], pathlib.Path | None, int]:
     if errors or skill_path is None:
         return errors, skill_path, 0
 
+    extras = sorted(path.name for path in skill_path.parent.iterdir() if path.name != "SKILL.md")
+    if extras:
+        fail(errors, f"runtime package contains unproven support files: {', '.join(extras)}")
+        return errors, skill_path, 0
+
     skill = skill_path.read_text(encoding="utf-8")
     state = (root / "STATE.md").read_text(encoding="utf-8")
     evals = (root / "EVALS.md").read_text(encoding="utf-8")

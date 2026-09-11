@@ -76,6 +76,17 @@ class VerifyTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("nested", result.stdout.lower())
 
+    def test_rejects_unproven_runtime_support_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            body = "Ground current truth."
+            text = skill_text(body)
+            path = write_project(root, body, count_words(text))
+            (path.parent / "REFERENCE.md").write_text("unproven runtime expansion\n", encoding="utf-8")
+            result = self.run_verify(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("runtime package", result.stdout.lower())
+
     def test_rejects_nested_name_directory_mismatch(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
