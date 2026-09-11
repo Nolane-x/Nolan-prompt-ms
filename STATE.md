@@ -29,13 +29,14 @@ The repository exists to maximize **behavioral leverage per token** through one 
 ## Observed Repository State
 
 - Runtime skill entrypoint is `verified-delta/SKILL.md`; its frontmatter `name` matches the parent directory.
-- The Verified Delta kernel remains 446 words; the structural move did not alter its content.
+- The runtime package contains only `SKILL.md`; `verify.py` rejects additional support files until a future evaluation justifies relaxing that invariant.
+- The Verified Delta kernel remains 446 words and has not been behaviorally edited during structural hardening.
 - `EVALS.md` defines seven pressure scenarios and four explicit behavioral gates.
 - `CONSTITUTION.md` defines sentence residency, compression, evidence, scope, and continuity laws.
-- `verify.py` discovers a single skill entrypoint, validates nested name/directory agreement, frontmatter, the 500-word ceiling, state/count drift, and false behavioral-gate closure.
-- `tests/test_verify.py` includes deterministic coverage for valid nested packaging and name/directory mismatch in addition to the prior static invariants.
+- `verify.py` requires exactly one nested skill package and validates package purity, name/directory agreement, frontmatter, the 500-word ceiling, state/count drift, and false behavioral-gate closure.
+- `tests/test_verify.py` covers the deterministic repository invariants, including rejection of root skill entrypoints and unproven runtime support files.
 - `.github/workflows/verify.yml` runs static checks on pushes and pull requests.
-- GitHub Actions previously proved the static verifier on `main`; the current structural branch must obtain its own GREEN run before merge.
+- Remote RED/GREEN evidence exists for the package-layout and runtime-purity verifier changes; these are static verifier results, not behavioral-agent evidence.
 - No runtime dependency, model profile, prompt-template catalog, memory system, or multi-agent framework has been added.
 - No fresh isolated-agent RED/GREEN behavioral run has been completed yet.
 
@@ -86,10 +87,11 @@ These debts block claims of behavioral verification or convergence.
 - Multi-agent by default.
 - Preserving old state without checking current reality.
 - Adding prose for constraints a deterministic verifier can enforce.
+- Adding runtime support files before evaluation proves progressive disclosure is needed.
 
 ## Next Best Action
 
-After the packaged-structure branch is GREEN and merged, run the **RED behavioral baseline** from `EVALS.md` in isolated fresh contexts without loading `verified-delta/SKILL.md`, recording exact failures and rationalizations.
+After the runtime-purity branch is GREEN and merged, run the **RED behavioral baseline** from `EVALS.md` in isolated fresh contexts without loading `verified-delta/SKILL.md`, recording exact failures and rationalizations.
 
 Only then alter the kernel. The first semantic edit must target a demonstrated failure; if no scenario fails, do not add guidance merely to make the skill look more complete.
 
