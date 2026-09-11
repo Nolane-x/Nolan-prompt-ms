@@ -106,6 +106,7 @@ def verify(root: pathlib.Path) -> tuple[list[str], pathlib.Path | None, int]:
 
     state_gate = gate(state, "Behavioral verification")
     eval_gates = {
+        "Activation": gate(evals, "Activation"),
         "RED baseline": gate(evals, "RED baseline"),
         "GREEN comparison": gate(evals, "GREEN comparison"),
         "Ablation": gate(evals, "Ablation"),

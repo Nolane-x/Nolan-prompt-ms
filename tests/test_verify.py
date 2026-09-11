@@ -16,7 +16,17 @@ def skill_text(body: str, name: str = "verified-delta") -> str:
     )
 
 
-def write_support(root: pathlib.Path, state_count: int, *, state_gate: str = "OPEN", red: str = "OPEN", green: str = "OPEN", ablation: str = "OPEN", holdout: str = "OPEN") -> None:
+def write_support(
+    root: pathlib.Path,
+    state_count: int,
+    *,
+    state_gate: str = "OPEN",
+    activation: str = "OPEN",
+    red: str = "OPEN",
+    green: str = "OPEN",
+    ablation: str = "OPEN",
+    holdout: str = "OPEN",
+) -> None:
     (root / "CONSTITUTION.md").write_text("# Constitution\n", encoding="utf-8")
     (root / "README.md").write_text("# Readme\n", encoding="utf-8")
     (root / "STATE.md").write_text(
@@ -25,6 +35,7 @@ def write_support(root: pathlib.Path, state_count: int, *, state_gate: str = "OP
     )
     (root / "EVALS.md").write_text(
         "# Evals\n\n"
+        f"**Activation:** {activation}\n"
         f"**RED baseline:** {red}\n"
         f"**GREEN comparison:** {green}\n"
         f"**Ablation:** {ablation}\n"
@@ -145,6 +156,7 @@ class VerifyTests(unittest.TestCase):
                 body,
                 count_words(text),
                 state_gate="CLOSED",
+                activation="CLOSED",
                 red="CLOSED",
                 green="OPEN",
                 ablation="CLOSED",
@@ -153,6 +165,26 @@ class VerifyTests(unittest.TestCase):
             result = self.run_verify(root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("behavioral verification gate", result.stdout.lower())
+
+    def test_closed_behavioral_gate_requires_activation_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            body = "Ground current truth."
+            text = skill_text(body)
+            write_project(
+                root,
+                body,
+                count_words(text),
+                state_gate="CLOSED",
+                activation="OPEN",
+                red="CLOSED",
+                green="CLOSED",
+                ablation="CLOSED",
+                holdout="CLOSED",
+            )
+            result = self.run_verify(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("activation", result.stdout.lower())
 
 
 if __name__ == "__main__":
