@@ -2,9 +2,14 @@
 
 Behavioral claims about this skill are accepted only through controlled comparison. Static review can find wording defects; it cannot prove behavioral improvement.
 
-## Current Gate
+## Current Gates
 
-**RED baseline: OPEN.** No fresh isolated-agent harness has yet executed the scenarios below without `SKILL.md`.
+**RED baseline:** OPEN  
+**GREEN comparison:** OPEN  
+**Ablation:** OPEN  
+**Cross-domain holdout:** OPEN
+
+No fresh isolated-agent harness has yet executed the scenarios below without `SKILL.md`.
 
 Until RED and GREEN runs exist, the repository may say **designed**, **reviewed**, or **source-grounded**. It must not say **behaviorally verified**, **converged**, or **proven superior**.
 
