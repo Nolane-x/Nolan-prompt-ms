@@ -8,9 +8,15 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 VERIFY = ROOT / "verify.py"
 
 
-def write_project(root: pathlib.Path, skill_body: str, state_count: int, *, state_gate: str = "OPEN", red: str = "OPEN", green: str = "OPEN", ablation: str = "OPEN", holdout: str = "OPEN") -> None:
-    skill = f"---\nname: verified-delta\ndescription: Use when scope drift or false completion can corrupt a task.\n---\n\n# Verified Delta\n\n{skill_body}\n"
-    (root / "SKILL.md").write_text(skill, encoding="utf-8")
+def skill_text(body: str, name: str = "verified-delta") -> str:
+    return (
+        f"---\nname: {name}\n"
+        "description: Use when scope drift or false completion can corrupt a task.\n"
+        f"---\n\n# Verified Delta\n\n{body}\n"
+    )
+
+
+def write_support(root: pathlib.Path, state_count: int, *, state_gate: str = "OPEN", red: str = "OPEN", green: str = "OPEN", ablation: str = "OPEN", holdout: str = "OPEN") -> None:
     (root / "CONSTITUTION.md").write_text("# Constitution\n", encoding="utf-8")
     (root / "README.md").write_text("# Readme\n", encoding="utf-8")
     (root / "STATE.md").write_text(
@@ -27,30 +33,14 @@ def write_project(root: pathlib.Path, skill_body: str, state_count: int, *, stat
     )
 
 
-def write_nested_project(root: pathlib.Path, *, skill_name: str = "verified-delta") -> None:
-    body = "Ground current truth. Preserve invariants. Verify reality. Stop."
-    skill = (
-        f"---\nname: {skill_name}\n"
-        "description: Use when scope drift or false completion can corrupt a task.\n"
-        f"---\n\n# Verified Delta\n\n{body}\n"
-    )
+def write_project(root: pathlib.Path, body: str, state_count: int, *, name: str = "verified-delta", **gates) -> pathlib.Path:
+    text = skill_text(body, name)
     skill_dir = root / "verified-delta"
     skill_dir.mkdir()
-    (skill_dir / "SKILL.md").write_text(skill, encoding="utf-8")
-    (root / "CONSTITUTION.md").write_text("# Constitution\n", encoding="utf-8")
-    (root / "README.md").write_text("# Readme\n", encoding="utf-8")
-    (root / "STATE.md").write_text(
-        f"# STATE\n\n**Behavioral verification gate:** OPEN\n**Core skill word count:** {count_words(skill)}\n",
-        encoding="utf-8",
-    )
-    (root / "EVALS.md").write_text(
-        "# Evals\n\n"
-        "**RED baseline:** OPEN\n"
-        "**GREEN comparison:** OPEN\n"
-        "**Ablation:** OPEN\n"
-        "**Cross-domain holdout:** OPEN\n",
-        encoding="utf-8",
-    )
+    path = skill_dir / "SKILL.md"
+    path.write_text(text, encoding="utf-8")
+    write_support(root, state_count, **gates)
+    return path
 
 
 def count_words(text: str) -> int:
@@ -66,28 +56,32 @@ class VerifyTests(unittest.TestCase):
             check=False,
         )
 
-    def test_accepts_consistent_open_project(self):
+    def test_accepts_consistent_nested_project(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
             body = "Ground current truth. Preserve invariants. Verify reality. Stop."
-            skill = f"---\nname: verified-delta\ndescription: Use when scope drift or false completion can corrupt a task.\n---\n\n# Verified Delta\n\n{body}\n"
-            write_project(root, body, count_words(skill))
+            text = skill_text(body)
+            write_project(root, body, count_words(text))
             result = self.run_verify(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("PASS", result.stdout)
 
-    def test_accepts_standard_nested_skill_directory(self):
+    def test_rejects_legacy_root_skill_entrypoint(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
-            write_nested_project(root)
+            text = skill_text("Ground current truth.")
+            (root / "SKILL.md").write_text(text, encoding="utf-8")
+            write_support(root, count_words(text))
             result = self.run_verify(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("PASS", result.stdout)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("nested", result.stdout.lower())
 
     def test_rejects_nested_name_directory_mismatch(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
-            write_nested_project(root, skill_name="other-name")
+            body = "Ground current truth."
+            text = skill_text(body, "other-name")
+            write_project(root, body, count_words(text), name="other-name")
             result = self.run_verify(root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("directory", result.stdout.lower())
@@ -96,8 +90,8 @@ class VerifyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
             body = "word " * 510
-            skill = f"---\nname: verified-delta\ndescription: Use when scope drift or false completion can corrupt a task.\n---\n\n# Verified Delta\n\n{body}\n"
-            write_project(root, body, count_words(skill))
+            text = skill_text(body)
+            write_project(root, body, count_words(text))
             result = self.run_verify(root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("500", result.stdout)
@@ -105,8 +99,7 @@ class VerifyTests(unittest.TestCase):
     def test_rejects_state_word_count_drift(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
-            body = "Ground current truth."
-            write_project(root, body, 999)
+            write_project(root, "Ground current truth.", 999)
             result = self.run_verify(root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("word count", result.stdout.lower())
@@ -114,8 +107,8 @@ class VerifyTests(unittest.TestCase):
     def test_rejects_invalid_skill_frontmatter(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
-            write_project(root, "Ground truth.", 1)
-            (root / "SKILL.md").write_text("# Missing frontmatter\n", encoding="utf-8")
+            path = write_project(root, "Ground truth.", 1)
+            path.write_text("# Missing frontmatter\n", encoding="utf-8")
             result = self.run_verify(root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("frontmatter", result.stdout.lower())
@@ -125,13 +118,8 @@ class VerifyTests(unittest.TestCase):
             with self.subTest(name=invalid_name), tempfile.TemporaryDirectory() as td:
                 root = pathlib.Path(td)
                 body = "Ground current truth."
-                skill = (
-                    f"---\nname: {invalid_name}\n"
-                    "description: Use when scope drift or false completion can corrupt a task.\n"
-                    f"---\n\n# Verified Delta\n\n{body}\n"
-                )
-                write_project(root, body, count_words(skill))
-                (root / "SKILL.md").write_text(skill, encoding="utf-8")
+                text = skill_text(body, invalid_name)
+                write_project(root, body, count_words(text), name=invalid_name)
                 result = self.run_verify(root)
                 self.assertNotEqual(result.returncode, 0, invalid_name)
                 self.assertIn("name", result.stdout.lower())
@@ -140,8 +128,17 @@ class VerifyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
             body = "Ground current truth."
-            skill = f"---\nname: verified-delta\ndescription: Use when scope drift or false completion can corrupt a task.\n---\n\n# Verified Delta\n\n{body}\n"
-            write_project(root, body, count_words(skill), state_gate="CLOSED", red="CLOSED", green="OPEN", ablation="CLOSED", holdout="CLOSED")
+            text = skill_text(body)
+            write_project(
+                root,
+                body,
+                count_words(text),
+                state_gate="CLOSED",
+                red="CLOSED",
+                green="OPEN",
+                ablation="CLOSED",
+                holdout="CLOSED",
+            )
             result = self.run_verify(root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("behavioral verification gate", result.stdout.lower())
