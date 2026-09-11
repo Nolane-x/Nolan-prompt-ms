@@ -28,6 +28,25 @@ Every sentence in `verified-delta/SKILL.md` must earn residency through seven te
 
 Fail one test: delete, merge, move, or rewrite.
 
+## Incumbent Has No Privilege
+
+`Verified Delta`, its tuple, its headings, and the Agent Skill form are hypotheses, not protected architecture.
+
+Before treating the current kernel as the compression target, keep materially different rivals alive. At minimum, behavioral evaluation may compare:
+
+- no added guidance;
+- the current full Verified Delta kernel;
+- a materially shorter Verified Delta variant;
+- a compact evidence-gated feedback/control loop;
+- a goal-and-invariant contract;
+- a verification-focused kernel.
+
+Freeze candidate wording before selection-validation. Compare matched tasks, serious-failure behavior, and context/tool/latency cost. Where candidate lengths differ materially, include a token-matched control when practical so semantic benefit is not confused with prompt volume.
+
+A materially shorter rival that is non-inferior on the preregistered behavioral criteria and strictly cheaper defeats the incumbent. Replace or prune the incumbent; do not invent a new reason to preserve familiar prose.
+
+If no-guidance performs equivalently, prefer no added guidance until an observed failure creates a residency claim.
+
 ## Evidence Before Expansion
 
 No rule enters the core because it sounds wise.
