@@ -16,7 +16,7 @@ Nolane Prompt MS takes the opposite approach: compress research into a small ker
 
 | File | Responsibility |
 |---|---|
-| `SKILL.md` | Runtime behavior loaded by an agent |
+| `verified-delta/SKILL.md` | Runtime skill package loaded by an agent |
 | `EVALS.md` | RED/GREEN pressure scenarios, gates, and scoring |
 | `CONSTITUTION.md` | Laws for editing, compressing, and validating the skill |
 | `STATE.md` | Minimal cross-session boot state and open research debt |
@@ -30,7 +30,7 @@ No source document is copied into runtime context. Research is distilled only wh
 
 **Alpha. Behavioral verification is still open.**
 
-The runtime kernel remains 446 words with no runtime dependencies, model profiles, or tool-specific templates. A deterministic verification layer now guards mechanical invariants, but it does **not** substitute for isolated-agent RED/GREEN behavioral evaluation.
+The runtime kernel remains 446 words with no runtime dependencies, model profiles, or tool-specific templates. It is packaged under `verified-delta/` so the skill name and parent directory agree. A deterministic verification layer guards mechanical invariants, but it does **not** substitute for isolated-agent RED/GREEN behavioral evaluation.
 
 Do not describe this version as proven, best, converged, or behaviorally verified.
 

@@ -27,6 +27,32 @@ def write_project(root: pathlib.Path, skill_body: str, state_count: int, *, stat
     )
 
 
+def write_nested_project(root: pathlib.Path, *, skill_name: str = "verified-delta") -> None:
+    body = "Ground current truth. Preserve invariants. Verify reality. Stop."
+    skill = (
+        f"---\nname: {skill_name}\n"
+        "description: Use when scope drift or false completion can corrupt a task.\n"
+        f"---\n\n# Verified Delta\n\n{body}\n"
+    )
+    skill_dir = root / "verified-delta"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(skill, encoding="utf-8")
+    (root / "CONSTITUTION.md").write_text("# Constitution\n", encoding="utf-8")
+    (root / "README.md").write_text("# Readme\n", encoding="utf-8")
+    (root / "STATE.md").write_text(
+        f"# STATE\n\n**Behavioral verification gate:** OPEN\n**Core skill word count:** {count_words(skill)}\n",
+        encoding="utf-8",
+    )
+    (root / "EVALS.md").write_text(
+        "# Evals\n\n"
+        "**RED baseline:** OPEN\n"
+        "**GREEN comparison:** OPEN\n"
+        "**Ablation:** OPEN\n"
+        "**Cross-domain holdout:** OPEN\n",
+        encoding="utf-8",
+    )
+
+
 def count_words(text: str) -> int:
     return len(text.split())
 
@@ -49,6 +75,22 @@ class VerifyTests(unittest.TestCase):
             result = self.run_verify(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("PASS", result.stdout)
+
+    def test_accepts_standard_nested_skill_directory(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            write_nested_project(root)
+            result = self.run_verify(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("PASS", result.stdout)
+
+    def test_rejects_nested_name_directory_mismatch(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            write_nested_project(root, skill_name="other-name")
+            result = self.run_verify(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("directory", result.stdout.lower())
 
     def test_rejects_more_than_500_skill_words(self):
         with tempfile.TemporaryDirectory() as td:
