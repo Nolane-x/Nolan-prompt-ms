@@ -33,11 +33,14 @@ The primitive is the target. **A skill is only one possible delivery mechanism.*
 - The Verified Delta kernel remains 446 words and has not been behaviorally edited during structural/evaluation hardening.
 - `EVALS.md` defines five gates: Activation, RED baseline, GREEN comparison, Ablation, and Cross-domain holdout.
 - Activation now decomposes **Utility**, **Trigger**, **Compliance/Boundary**, and **Form-factor fit** instead of treating “skill present” as one intervention.
-- The required diagnostic ladder is now `no guidance → forced-load current skill → discoverable current skill`; a preregistered compact always-on candidate is compared only after RED/utility evidence identifies behavior worth preserving.
-- Activation results are harness-scoped. The experimental manifest now records delivery form and the available-skill-set hash in addition to model/harness/tool/resource variables.
-- Public development coverage is E1–E13 with a semantic coverage map. E12 directly pressures the irreversible/high-impact branch; E13 pressures the first-invalid-transition-boundary rule.
+- The diagnostic ladder is `no guidance → forced-load current skill → discoverable current skill`; a preregistered compact always-on candidate is compared only after RED/utility evidence identifies behavior worth preserving.
+- Activation uses two populations: a balanced diagnostic set for under/over-trigger analysis and a representative workload sample for natural prevalence, total cost, and form-factor choice. These populations answer different questions and must not be substituted for one another.
+- Metadata or wording selected on development cases must be frozen and checked on fresh selection-validation cases before a final holdout claim.
+- Repeated trials estimate stochastic reliability within a task; they do not count as additional independent tasks. Candidate/control analysis must preserve task pairing and uncertainty rather than inflating sample size with repeated runs.
+- Activation results are harness-scoped. The experimental manifest records delivery form and available-skill-set hash in addition to model/harness/tool/resource variables.
+- Public development coverage is E1–E13 with a semantic coverage map. E12 pressures irreversible/high-impact actions; E13 pressures the first-invalid-transition-boundary rule.
 - Semantic coverage remains a test-planning hypothesis, not sentence-residency evidence.
-- `EVALS.md` requires matched experimental manifests, clean trials, outcome-first grading, component scores, repeated trials, transcript inspection, paired controls, contamination handling, and interaction-aware ablation.
+- `EVALS.md` requires clean trials, outcome-first grading, component scores, repeated trials, transcript inspection, paired controls, contamination handling, selection-validation, and interaction-aware ablation.
 - `CONSTITUTION.md` defines sentence residency, compression, evidence, scope, and continuity laws.
 - `verify.py` requires exactly one nested skill package, validates package purity/frontmatter/size/state consistency, and refuses overall behavioral closure while Activation remains OPEN.
 - `.github/workflows/verify.yml` runs deterministic checks on pushes and pull requests.
@@ -57,10 +60,12 @@ External research currently supports the **questions and eval design**, not the 
 - Agent Skills recommends that `description` express both what a skill does and when to use it; the current Verified Delta description is primarily trigger-oriented. Whether adding “what” improves discovery without over-triggering is unmeasured.
 - Agent Skills currently permits descriptions up to 1024 characters; the repository's ≤500 and `Use when...` constraints are project policies, not universal spec requirements.
 - GitHub Copilot project skill discovery uses `.github/skills`, `.claude/skills`, or `.agents/skills`; a generic distributable skill directory and a product auto-discovery installation path are not the same thing.
-- agent evals need isolated trials, multiple attempts, explicit graders, outcome checks, transcript review, and matched harness configuration;
+- balanced capability tests are useful for exposing both directions of behavior, but deployment prevalence must be estimated from a representative workload rather than inferred from an artificially balanced set;
+- repeated adaptive selection on the same eval can produce winner's-curse optimism, so wording/metadata selection needs fresh validation before final holdout reporting;
+- repeated stochastic trials on one task estimate reliability but remain correlated by task, so task-level pairing and uncertainty must be retained;
+- agent evals need isolated trials, explicit graders, outcome checks, transcript review, and matched harness configuration;
 - infrastructure and resource configuration can move agentic benchmark scores enough to confound small deltas;
 - public benchmarks can be contaminated or recognized by capable tool-using agents, so final holdouts must stay unseen;
-- line-level prompt ablation can expose regressions that static review misses;
 - semantic prompt units can have joint/combinatorial effects, so leave-one-out removal alone is insufficient when units substitute or interact;
 - coding agents show strong action bias on tasks where the correct delta is no code change;
 - scope evaluations can become artificially easy when authorization boundaries are explicitly declared instead of inferred;
@@ -97,16 +102,18 @@ Do not expand this repository into:
 
 1. **Utility upper bound unmeasured.** Compare no guidance with force-loaded current skill before spending effort on metadata optimization.
 2. **Activation behavior unmeasured.** Progressive-disclosure Trigger, Compliance, and Boundary need balanced positives/negatives plus realistic distractor-skill conditions.
-3. **Form-factor fit unmeasured.** Compare discoverable skill against no guidance and a preregistered compact always-on candidate on a representative workload. Do not write the compact candidate from holdout failures.
-4. **RED behavioral baseline missing.** E1–E13 need fresh no-guidance trials; public probes are development tasks, not final holdouts.
-5. **GREEN behavioral comparison missing.** Matched runs with the unchanged 446-word kernel are required.
-6. **Wording micro-tests missing.** Competing phrasings need no-guidance controls, repeated fresh contexts, and manual transcript review.
-7. **Semantic ablation unexecuted.** Use single-unit ablation first, then suspected overlapping pairs/groups before declaring silent units redundant.
-8. **Hidden cross-domain holdout missing.** Final holdout prompts must remain outside the public repository until evaluation is complete.
-9. **Compression hypothesis unresolved.** Test materially shorter kernels; do not assume 446 words are necessary or that an arbitrary smaller target is better.
-10. **Frontmatter policy is partly project-specific.** Resolve `Use when...` and ≤500 policy by activation evidence rather than calling either a universal requirement.
-11. **Runtime portability unmeasured.** Any skill-use claim is harness-scoped until replicated. Distribution/install paths must be treated separately from the canonical source package.
-12. **Coverage adequacy is unvalidated.** A public probe that cannot discriminate the semantic unit mapped to it must be split, replaced, or removed.
+3. **Natural activation prevalence unmeasured.** Form-factor decisions require a representative workload sample; a balanced trigger benchmark is not a prevalence estimate.
+4. **Form-factor fit unmeasured.** Compare discoverable skill against no guidance and a preregistered compact always-on candidate on a representative workload. Do not write the compact candidate from holdout failures.
+5. **Selection optimism unmeasured.** Wording/metadata chosen on development cases needs fresh selection-validation before final holdout use.
+6. **RED behavioral baseline missing.** E1–E13 need fresh no-guidance trials; public probes are development tasks, not final holdouts.
+7. **GREEN behavioral comparison missing.** Matched runs with the unchanged 446-word kernel are required.
+8. **Wording micro-tests missing.** Competing phrasings need no-guidance controls, repeated fresh contexts, and manual transcript review.
+9. **Semantic ablation unexecuted.** Use single-unit ablation first, then suspected overlapping pairs/groups before declaring silent units redundant.
+10. **Hidden cross-domain holdout missing.** Final holdout prompts must remain outside the public repository until evaluation is complete.
+11. **Compression hypothesis unresolved.** Test materially shorter kernels; do not assume 446 words are necessary or that an arbitrary smaller target is better.
+12. **Frontmatter policy is partly project-specific.** Resolve `Use when...` and ≤500 policy by activation evidence rather than calling either a universal requirement.
+13. **Runtime portability unmeasured.** Any skill-use claim is harness-scoped until replicated. Distribution/install paths must be treated separately from the canonical source package.
+14. **Coverage adequacy is unvalidated.** A public probe that cannot discriminate the semantic unit mapped to it must be split, replaced, or removed.
 
 These debts block claims of behavioral verification or convergence.
 
@@ -124,6 +131,9 @@ These debts block claims of behavioral verification or convergence.
 - Treating a semantic coverage table as proof that a sentence works.
 - Treating two individually silent ablations as proof both units are useless without checking interaction/redundancy.
 - Optimizing the skill description before proving force-loaded content has marginal utility.
+- Treating a balanced activation benchmark as evidence of real-world activation prevalence.
+- Reporting the best score on the same benchmark repeatedly used to choose wording as fresh evidence.
+- Counting repeated stochastic trials on one task as independent task diversity.
 - Assuming “skill” is the correct abstraction because the project began as a skill.
 - Copying the same skill into every vendor-specific auto-discovery directory before choosing a deployment target.
 - Changing runtime wording because external research merely sounds compatible with it.
@@ -132,9 +142,9 @@ These debts block claims of behavioral verification or convergence.
 
 Obtain a **fresh isolated-agent harness** and execute the diagnostic ladder in this order:
 
-`U0 no guidance → U1 forced-load current skill → A2 normal progressive disclosure → F3 preregistered compact always-on candidate only if U1 demonstrates useful behavior`
+`U0 no guidance → U1 forced-load current skill → A2 progressive disclosure on balanced diagnostics → validate selected metadata on fresh cases → F0/F1/F2/F3 on a representative workload only if U1 demonstrates useful behavior`
 
-Run RED with paired cases that falsify both directions of each rule: act/no-op, narrow/wider scope, infer/clarify, low/high effort, continue/restart. Record Trigger, Compliance, Boundary, outcome, and cost separately.
+Run RED with paired cases that falsify both directions of each rule: act/no-op, narrow/wider scope, infer/clarify, low/high effort, continue/restart. Record Trigger, Compliance, Boundary, outcome, cost, per-task reliability, and uncertainty separately.
 
 If an isolated harness is unavailable, stop at the evidence boundary. Do not substitute this already-exposed session for a clean control, because it has read the skill, its evals, and the research hypotheses.
 
