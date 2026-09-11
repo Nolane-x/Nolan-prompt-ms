@@ -73,7 +73,9 @@ A new file requires a distinct loading or maintenance reason. “More organized�
 - `SKILL.md`: target **≤ 500 words**.
 - Supporting runtime prose: add only when an eval proves progressive disclosure is needed.
 - Examples: one excellent example over a catalog.
-- Dependencies/scripts: zero until deterministic enforcement or evaluation justifies them.
+- Runtime dependencies: zero unless evaluation demonstrates otherwise.
+
+If an invariant can be checked deterministically, enforce it in `verify.py` instead of spending runtime skill tokens on it.
 
 Crossing a target creates explicit compression debt in `STATE.md`.
 
@@ -104,11 +106,11 @@ During editing:
 - do not widen scope to justify a preferred solution.
 
 After editing:
-1. run the relevant eval or leave its gate open;
-2. count `SKILL.md` words;
+1. run `python verify.py`;
+2. run the relevant behavioral eval or leave its gate open;
 3. scan for semantic duplication;
 4. update `STATE.md`;
-5. stop.
+5. rerun the verifier, then stop.
 
 ## Continuity
 
