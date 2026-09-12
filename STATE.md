@@ -61,7 +61,7 @@ The three-replicate target-authority stability result is preserved in `evals/tar
 
 All six pairs were comparable under the recorded `gpt-5.6-luna` / actual reasoning `medium` / Copilot CLI `1.0.83` configuration. R1A passed the preregistered **development-stability** rule. This did not grant runtime residency or cross-domain validity.
 
-## Selection-Validation Boundary — Frozen, Behavioral Run Unexecuted
+## Selection-Validation Boundary — Frozen, Ready to Dispatch
 
 The next evidence boundary is preregistered in `evals/target-authority-selection-plan.json`, blob `1b95c5d3658d56e9aa8f25f699b64c63f3380c2d`.
 
@@ -95,9 +95,9 @@ Frozen decision rule requires all of:
 
 There is no behavioral early stopping. Infrastructure failures may be retried with the same frozen identity and do not count as behavioral samples. If R1A fails, preserve the evidence and do not tune R1A on these same instances. If it passes, the strongest allowed status is **selection-stable under the observed harness/model configuration; not runtime-resident**.
 
-## Selection Execution Infrastructure — Implemented, Not Behavioral Evidence
+## Selection Execution Infrastructure — Integrated, Not Behavioral Evidence
 
-The frozen plan now has an execution boundary:
+The frozen plan has a merged execution boundary:
 
 - `selection_validation.py` validates frozen plan/treatment identities, generates exactly 12 deterministic fresh cases from an explicit execution seed, keeps visible and hidden surfaces separate, admits every reference path, prepares only agent-visible state, records immutable receipts, fails closed on provenance/comparability drift, and evaluates the literal preregistered rule.
 - `selection_process_evidence.py` derives process evidence only from structured `tool.execution_start` arguments. Assistant prose and unrelated metadata strings cannot satisfy probe or authoritative-state requirements.
@@ -105,21 +105,23 @@ The frozen plan now has an execution boundary:
 - Raw model transcript remains audit material; grader-visible process evidence comes from structured tool events.
 - Normal push/PR CI cannot consume the behavioral budget because the selection workflow has no automatic trigger.
 
-Infrastructure was developed through explicit RED→GREEN boundaries. Important runs include:
+PR #25 merged the execution boundary into `main` as commit `e62fde30b6fb722cd122d1041b1179fe7da2f790` after exact-head merge-ref run `34698483551` passed **87/87 tests** plus `python verify.py`. Post-merge `main` run `34698546154` independently passed **87/87 tests** plus `python verify.py` on that merge commit. The runtime remained 446 words.
+
+Earlier RED→GREEN infrastructure evidence includes:
 
 - `34694922809` RED → `34694999546` GREEN for the execution harness existence/generator boundary;
 - bytecode-induced non-determinism localized and fixed before `34695184393` GREEN;
 - `34695242624` RED → `34695380305` GREEN for immutable receipts and the decision rule;
 - `34695452037` RED → `34695562998` GREEN for the manual workflow contract;
 - `34695602489` and `34695720095` REDs localized missing trusted process-evidence plumbing;
-- `34695877200` GREEN: **86/86 tests** and `python verify.py` PASS;
-- `34698281819` GREEN after structured-argument hardening: **86/86 tests** and `python verify.py` PASS, with runtime still 446 words.
+- `34695877200` GREEN for the first full tool-event-wired runner;
+- `34698281819` GREEN after structured-argument hardening.
 
 These runs are repository/infrastructure evidence only. They are not selection behavioral samples.
 
 ## Open Debts
 
-1. **The frozen 24-trial selection-validation experiment has not run.** Execution is allowed only after exact-head PR CI, merge, and post-merge `main` CI are green.
+1. **The frozen 24-trial selection-validation experiment has not run.** All repository gates needed before dispatch are now green; the next evidence-producing action is the single manual dispatch.
 2. **Final hidden instances remain genuinely fresh and unseen.** Do not publish or tune against them before execution.
 3. **Final cross-domain hidden holdout remains open even if selection validation passes.**
 4. Provider snapshot immutability remains unavailable.
@@ -156,11 +158,13 @@ Unresolved research question:
 
 ## Next Best Action
 
-Keep `verified-delta/SKILL.md`, R1A wording, and the frozen selection decision rule unchanged.
+Keep `verified-delta/SKILL.md`, R1A wording, the generator, and the frozen selection decision rule unchanged.
 
-Require the exact final PR head to pass the full unit suite and `python verify.py`, audit the diff and frozen blobs, merge with the expected head SHA, then require post-merge `main` CI to pass. Only after those infrastructure gates are green may the manual selection workflow be dispatched **exactly once** with one fresh recorded execution seed for all 24 frozen arms.
+Dispatch `.github/workflows/target-authority-selection.yml` **exactly once** from current `main` with one fresh execution-time seed for all 24 arms. Prefer a named model/reasoning configuration if available so paired-arm routing remains stable; runtime attestation remains authoritative.
 
-After that run, preserve its evidence exactly as observed. A behavioral failure is a valid result; a non-comparable or infrastructure-incomplete run is not a treatment result. Do not tune R1A on the generated selection instances.
+Preserve the resulting generation/admission artifacts, all immutable arm receipts, and the summary exactly as observed. A behavioral failure is a valid result; a non-comparable or infrastructure-incomplete run is not a treatment result. Do not tune R1A on the generated selection instances.
+
+The current ChatGPT GitHub connector can inspect and re-run existing Actions runs but does not expose creation of a `workflow_dispatch` event. That tooling limitation is external to the repository and is not evidence about R1/R1A.
 
 ## Update Rule
 
