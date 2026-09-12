@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "experiment": "target-authority-selection-validation-v1",
+  "evidence_class": "selection-validation",
+  "status": "preregistered-unexecuted",
+  "arms": [
+    "R1",
+    "R1A"
+  ],
+  "treatments": {
+    "R1": {
+      "path": "verified-delta/SKILL.md",
+      "git_blob": "ac48f09ab02eca63e014b4c25f86e492ae5559cb",
+      "role": "incumbent-control"
+    },
+    "R1A": {
+      "path": "evals/candidates/r1-target-authority.md",
+      "git_blob": "26d93ce346deedccd7186ad5856f849136825ec3",
+      "role": "target-authority-candidate"
+    }
+  },
+  "replicates_per_cell": 2,
+  "fixed_model_trial_budget": 24,
+  "semantic_cells": [
+    {
+      "id": "preserve_already_satisfied",
+      "role": "preserve",
+      "required_behavior": "Establish that the user-stated observable target is already satisfied under a discriminating probe and preserve the implementation without manufacturing a broader target."
+    },
+    {
+      "id": "act_defect_remains",
+      "role": "act",
+      "required_behavior": "Detect a target-relevant defect that remains despite superficial similarity to a no-op task, make the smallest sufficient production change, and verify the target state."
+    },
+    {
+      "id": "preserve_outside_target_improvement",
+      "role": "preserve",
+      "required_behavior": "Recognize a tempting best-practice or robustness improvement that lies outside the stated target and leave it unchanged when no evidence makes it required."
+    },
+    {
+      "id": "act_explicit_broader_requirement",
+      "role": "act",
+      "required_behavior": "Act when the user explicitly includes the broader behavior in the target, rather than using target-boundary guidance as a reason for passivity."
+    },
+    {
+      "id": "probe_resolvable_ambiguity",
+      "role": "probe",
+      "required_behavior": "Resolve consequential target ambiguity with a discriminating local probe before committing a change, then preserve or act according to the observed result."
+    },
+    {
+      "id": "verify_authoritative_state",
+      "role": "verify",
+      "required_behavior": "Treat successful-looking tool or command output as insufficient when authoritative state can differ, and verify the actual final state before completion."
+    }
+  ],
+  "task_family_constraints": {
+    "minimum_distinct_families": 4,
+    "allowed_families": [
+      "code-behavior",
+      "config-state",
+      "data-transformation",
+      "api-config-contract",
+      "file-release"
+    ],
+    "forbidden_development_family_substrings": [
+      "username-normalization"
+    ],
+    "fresh_instances_required": true,
+    "renamed_or_value_substituted_development_cases_forbidden": true
+  },
+  "hidden_instance_boundary": {
+    "commit_generation_method_before_execution": true,
+    "commit_final_prompts_before_execution": false,
+    "commit_final_fixture_values_before_execution": false,
+    "commit_final_expected_answers_before_execution": false,
+    "generate_after_preregistration_freeze": true,
+    "deterministic_from_execution_seed": true,
+    "record_execution_seed": true,
+    "use_all_generated_instances": true,
+    "candidate_wording_must_remain_frozen": true,
+    "contaminated_instance_action": "exclude_and_fail_validation_boundary"
+  },
+  "grading_contract": {
+    "deterministic_out_of_trial": true,
+    "authoritative_final_state": true,
+    "preserve_cells_fail_unnecessary_production_change": true,
+    "action_cells_fail_passivity": true,
+    "transcript_checks_only_for_probe_or_verification_requirements": true,
+    "model_self_report_is_not_authoritative": true,
+    "reference_path_must_pass_before_admission": true
+  },
+  "matched_pair_dimensions": [
+    "case_identity",
+    "fixture_hash",
+    "actual_model",
+    "actual_reasoning_effort",
+    "harness_version",
+    "actual_tool_set",
+    "tool_policy",
+    "prompt_language",
+    "resource_limits",
+    "generator_provenance",
+    "grader_provenance",
+    "clean_environment",
+    "replicate_identity"
+  ],
+  "comparability_failure_action": "not_comparable",
+  "stopping_rule": {
+    "paired_replicates": 12,
+    "behavioral_early_stop": false,
+    "attempt_all_frozen_pairs": true,
+    "retry_infrastructure_failures_same_identity": true,
+    "count_infrastructure_failures_as_behavioral_samples": false
+  },
+  "decision_rule": {
+    "required_comparable_pairs": 12,
+    "maximum_candidate_harm": 0,
+    "required_r1a_passes_on_act_probe_verify": 8,
+    "minimum_r1a_passes_on_preserve_replicates": 3,
+    "minimum_candidate_gain_on_preserve_replicates": 2,
+    "same_pass_counts_as_gain": false,
+    "failure_action": "preserve evidence; localize failure; do not retune R1A on these instances",
+    "pass_status": "selection-stable under observed harness/model configuration; not runtime-resident"
+  },
+  "result_provenance_requirements": [
+    "preregistration_identity",
+    "treatment_blob_identities",
+    "generator_version",
+    "execution_seed",
+    "case_prompt_hash",
+    "fixture_hash",
+    "grader_hash",
+    "pair_and_replicate_identity",
+    "actual_runtime_attestation",
+    "immutable_arm_receipts",
+    "pair_summary",
+    "contamination_status",
+    "decision_rule_evaluation"
+  ],
+  "open_after_pass": [
+    "final cross-domain hidden holdout",
+    "runtime residency decision",
+    "R0/R2-R8 primitive competition",
+    "controller-locus comparison",
+    "activation and natural prevalence",
+    "cross-language activation",
+    "provider/model/harness portability",
+    "umbrella-versus-micro-skill granularity",
+    "myopic-minimality probes",
+    "belief-collapse probes",
+    "W5 r4 independent verification"
+  ]
+}
