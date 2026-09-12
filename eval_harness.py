@@ -7,6 +7,7 @@ import argparse
 import json
 import pathlib
 import shutil
+import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -62,6 +63,35 @@ def command_prepare(case_id: str, destination: pathlib.Path, as_json: bool) -> i
     return 0
 
 
+def command_grade(case_id: str, workspace: pathlib.Path, as_json: bool) -> int:
+    find_case(case_id)
+    grader = CASES / case_id / "grader.py"
+    if not grader.is_file():
+        raise FileNotFoundError(f"grader not implemented for case: {case_id}")
+    if not workspace.is_dir():
+        raise FileNotFoundError(f"workspace does not exist: {workspace}")
+
+    result = subprocess.run(
+        [sys.executable, str(grader), str(workspace.resolve())],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode not in (0, 1):
+        detail = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
+        raise RuntimeError(f"grader infrastructure failure: {detail}")
+
+    payload = json.loads(result.stdout)
+    if as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True))
+    else:
+        print("PASS" if payload["passed"] else "FAIL")
+        for name, passed in payload["checks"].items():
+            print(f"- {name}: {'PASS' if passed else 'FAIL'}")
+    return 0 if payload["passed"] else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -73,6 +103,11 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("case_id")
     prepare_parser.add_argument("destination", type=pathlib.Path)
     prepare_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    grade_parser = subparsers.add_parser("grade", help="grade a completed workspace outside the agent context")
+    grade_parser.add_argument("case_id")
+    grade_parser.add_argument("workspace", type=pathlib.Path)
+    grade_parser.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -83,8 +118,10 @@ def main(argv: list[str] | None = None) -> int:
             return command_list(args.as_json)
         if args.command == "prepare":
             return command_prepare(args.case_id, args.destination, args.as_json)
+        if args.command == "grade":
+            return command_grade(args.case_id, args.workspace, args.as_json)
         raise AssertionError(args.command)
-    except (FileExistsError, FileNotFoundError, ValueError) as exc:
+    except (FileExistsError, FileNotFoundError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
