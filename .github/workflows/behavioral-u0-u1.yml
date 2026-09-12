@@ -156,7 +156,7 @@ jobs:
             --model="$MODEL_ID" \
             "${REASONING_ARGS[@]}" \
             --output-format=json \
-            --available-tools='bash,apply_patch,create,edit,view,glob,grep' \
+            --available-tools='bash,create,edit,view,glob,grep' \
             --allow-tool='write,shell(python:*)' \
             --disable-builtin-mcps \
             --no-ask-user \
@@ -288,6 +288,7 @@ jobs:
           attestation = json.loads(pathlib.Path(attestation_path).read_text(encoding="utf-8"))
           actual_model_id = attestation["model"]
           reasoning_effort = attestation["reasoning_effort"]
+          tool_set = attestation["tool_set"]
           is_u1 = condition == "U1"
           payload = {
               "schema_version": 1,
@@ -305,7 +306,7 @@ jobs:
                       "runner_os": os.environ.get("RUNNER_OS", "unknown"),
                       "runner_arch": os.environ.get("RUNNER_ARCH", "unknown"),
                   },
-                  "tool_set": ["bash", "apply_patch", "create", "edit", "view", "glob", "grep"],
+                  "tool_set": tool_set,
                   "tool_policy": {
                       "allow": "write,shell(python:*)",
                       "builtin_mcps": False,
