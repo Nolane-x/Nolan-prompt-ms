@@ -412,6 +412,14 @@ jobs:
           )
           PY
 
+          # Grade process claims only from trusted tool events, never from assistant prose.
+          python selection_process_evidence.py extract \
+            "$BUNDLE_ROOT" \
+            "$CASE_ID" \
+            "$TRIAL_ROOT/copilot-events.jsonl" \
+            "$TRIAL_ROOT/grading-evidence.txt" \
+            --json > "$TRIAL_ROOT/process-evidence.json"
+
           python selection_validation.py record \
             "$BUNDLE_ROOT" \
             "$CASE_ID" \
@@ -420,7 +428,7 @@ jobs:
             --arm "$ARM" \
             --model-id "$ACTUAL_MODEL_ID" \
             --harness-id "$HARNESS_ID" \
-            --transcript "$TRIAL_ROOT/transcript.md" \
+            --transcript "$TRIAL_ROOT/grading-evidence.txt" \
             --metrics "$TRIAL_ROOT/metrics.json" \
             --run-config "$TRIAL_ROOT/run-config.json" \
             --json > "$TRIAL_ROOT/record-output.json"
