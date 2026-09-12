@@ -13,8 +13,10 @@ import sys
 import tempfile
 
 import eval_harness as base
+import semantic_ablation as ablation
 
 ROOT = pathlib.Path(__file__).resolve().parent
+HARNESS = pathlib.Path(__file__).resolve()
 PLAN_PATH = ROOT / "evals" / "target-authority-selection-plan.json"
 SKILL = ROOT / "verified-delta" / "SKILL.md"
 CANDIDATE = ROOT / "evals" / "candidates" / "r1-target-authority.md"
@@ -176,10 +178,7 @@ def case_blueprint(seed: str, cell_id: str, replicate: int) -> dict:
             ),
             "fixture": {
                 "transform.py": current,
-                "probe.py": (
-                    "from transform import keep_readings\n"
-                    "print(keep_readings([None, 0, 3]))\n"
-                ),
+                "probe.py": "from transform import keep_readings\nprint(keep_readings([None, 0, 3]))\n",
             },
             "writes": {} if correct else {"transform.py": fixed},
             "commands": [["python", "probe.py"]],
@@ -228,8 +227,7 @@ def run_reference(case_root: pathlib.Path, workspace: pathlib.Path) -> str:
         argv = [sys.executable, "-B", *command[1:]] if command and command[0] == "python" else command
         transcript_parts.append("$ " + " ".join(command))
         result = subprocess.run(argv, cwd=workspace, text=True, capture_output=True, check=False)
-        transcript_parts.append(result.stdout)
-        transcript_parts.append(result.stderr)
+        transcript_parts.extend([result.stdout, result.stderr])
         if result.returncode != 0:
             raise RuntimeError(f"reference command failed for {case_root.name}: {' '.join(command)}")
     for required in reference["transcript_required"]:
@@ -270,10 +268,7 @@ def materialize_case(bundle_root: pathlib.Path, case: dict, seed: str) -> dict:
         shutil.copytree(fixture, workspace)
         transcript = run_reference(case_root, workspace)
         expected_tree = base.sha256_tree(workspace)
-    grader = {
-        "expected_tree_sha256": expected_tree,
-        "transcript_required": blueprint["transcript_required"],
-    }
+    grader = {"expected_tree_sha256": expected_tree, "transcript_required": blueprint["transcript_required"]}
     (hidden / "grader.json").write_text(json_text(grader), encoding="utf-8")
     return {
         **case,
@@ -289,16 +284,14 @@ def build_cases(seed: str, plan: dict) -> list[dict]:
     for cell in plan["semantic_cells"]:
         for replicate in range(1, plan["replicates_per_cell"] + 1):
             cell_id = cell["id"]
-            cases.append(
-                {
-                    "id": stable_case_id(seed, cell_id, replicate),
-                    "cell_id": cell_id,
-                    "role": cell["role"],
-                    "family": FAMILY_BY_CELL[cell_id],
-                    "replicate": replicate,
-                    "pair_id": f"{cell_id}-r{replicate}",
-                }
-            )
+            cases.append({
+                "id": stable_case_id(seed, cell_id, replicate),
+                "cell_id": cell_id,
+                "role": cell["role"],
+                "family": FAMILY_BY_CELL[cell_id],
+                "replicate": replicate,
+                "pair_id": f"{cell_id}-r{replicate}",
+            })
     if len(cases) != 12:
         raise ValueError("generator must create exactly 12 cases")
     families = {case["family"] for case in cases}
@@ -317,6 +310,9 @@ def build_manifest(seed: str, plan: dict, bundle_root: pathlib.Path) -> dict:
         "evidence_class": plan["evidence_class"],
         "seed": seed,
         "plan_sha256": sha256_file(PLAN_PATH),
+        "generator_sha256": sha256_file(HARNESS),
+        "contamination_status": "mechanically-clean",
+        "decision_rule": plan["decision_rule"],
         "treatments": {
             arm: {
                 "git_blob": plan["treatments"][arm]["git_blob"],
@@ -328,27 +324,51 @@ def build_manifest(seed: str, plan: dict, bundle_root: pathlib.Path) -> dict:
     }
 
 
-def load_bundle(bundle: pathlib.Path) -> dict:
+def validate_sha256(value: object, label: str) -> str:
+    if not isinstance(value, str) or len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+        raise ValueError(f"{label} must be a lowercase SHA-256 digest")
+    return value
+
+
+def load_bundle(bundle: pathlib.Path, *, require_current: bool = True) -> dict:
     manifest_path = bundle / "bundle.json"
     if not manifest_path.is_file():
         raise FileNotFoundError(f"bundle manifest does not exist: {manifest_path}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    plan = load_plan()
     if manifest.get("experiment") != EXPERIMENT or manifest.get("schema_version") != 1:
         raise ValueError("invalid selection bundle identity")
-    if manifest.get("plan_sha256") != sha256_file(PLAN_PATH):
-        raise ValueError("selection bundle preregistration provenance mismatch")
     if len(manifest.get("cases", [])) != 12:
         raise ValueError("selection bundle must contain exactly 12 cases")
-    expected_treatments = {
-        arm: {
-            "git_blob": plan["treatments"][arm]["git_blob"],
-            "content_sha256": sha256_file(SKILL if arm == "R1" else CANDIDATE),
+    validate_sha256(manifest.get("plan_sha256"), "bundle plan_sha256")
+    validate_sha256(manifest.get("generator_sha256"), "bundle generator_sha256")
+    if manifest.get("contamination_status") != "mechanically-clean":
+        raise ValueError("selection bundle contamination boundary is not clean")
+    if not isinstance(manifest.get("decision_rule"), dict):
+        raise ValueError("selection bundle decision rule is missing")
+    if set(manifest.get("treatments", {})) != set(ARMS):
+        raise ValueError("selection bundle treatments are invalid")
+    for arm in ARMS:
+        validate_sha256(manifest["treatments"][arm].get("content_sha256"), f"{arm} content_sha256")
+        blob = manifest["treatments"][arm].get("git_blob")
+        if not isinstance(blob, str) or len(blob) != 40:
+            raise ValueError(f"{arm} git blob is invalid")
+    if require_current:
+        plan = load_plan()
+        if manifest["plan_sha256"] != sha256_file(PLAN_PATH):
+            raise ValueError("selection bundle preregistration provenance mismatch")
+        expected = {
+            arm: {
+                "git_blob": plan["treatments"][arm]["git_blob"],
+                "content_sha256": sha256_file(SKILL if arm == "R1" else CANDIDATE),
+            }
+            for arm in ARMS
         }
-        for arm in ARMS
-    }
-    if manifest.get("treatments") != expected_treatments:
-        raise ValueError("selection bundle treatment provenance mismatch")
+        if manifest["treatments"] != expected:
+            raise ValueError("selection bundle treatment provenance mismatch")
+        if manifest["decision_rule"] != plan["decision_rule"]:
+            raise ValueError("selection bundle decision rule drifted")
+        if manifest["generator_sha256"] != sha256_file(HARNESS):
+            raise ValueError("selection bundle generator provenance mismatch")
     return manifest
 
 
@@ -375,6 +395,67 @@ def validate_case_provenance(bundle: pathlib.Path, case: dict) -> pathlib.Path:
     return case_root
 
 
+def treatment_set(manifest: dict) -> dict[str, str]:
+    return {arm: manifest["treatments"][arm]["content_sha256"] for arm in ARMS}
+
+
+def validate_run_binding(run_config: dict, manifest: dict, arm: str, model_id: str, harness_id: str) -> None:
+    value = run_config["value"]
+    if value["matched"]["model"]["id"] != model_id:
+        raise ValueError("run config matched.model.id does not match --model-id")
+    if value["matched"]["harness"]["id"] != harness_id:
+        raise ValueError("run config matched.harness.id does not match --harness-id")
+    loaded = manifest["treatments"][arm]["content_sha256"]
+    if value["intervention"] != ablation.expected_intervention(arm, loaded):
+        raise ValueError(f"run config intervention does not match frozen {arm} treatment")
+
+
+def classify_effect(r1_passed: bool, r1a_passed: bool) -> str:
+    if r1_passed and r1a_passed:
+        return "same_pass"
+    if not r1_passed and not r1a_passed:
+        return "same_fail"
+    if not r1_passed and r1a_passed:
+        return "candidate_gain"
+    return "candidate_harm"
+
+
+def evaluate_decision(pairs: list[dict], rule: dict | None = None) -> dict:
+    if rule is None:
+        rule = load_plan()["decision_rule"]
+    comparable = sum(bool(pair.get("comparable")) for pair in pairs)
+    harm = sum(pair.get("effect") == "candidate_harm" for pair in pairs)
+    preserve = [pair for pair in pairs if pair.get("role") == "preserve"]
+    act_probe_verify = [pair for pair in pairs if pair.get("role") in {"act", "probe", "verify"}]
+    r1a_required_passes = sum(
+        bool(pair.get("arms", {}).get("R1A", {}).get("passed")) for pair in act_probe_verify
+    )
+    r1a_preserve_passes = sum(
+        bool(pair.get("arms", {}).get("R1A", {}).get("passed")) for pair in preserve
+    )
+    preserve_gain = sum(pair.get("effect") == "candidate_gain" for pair in preserve)
+    checks = {
+        "required_comparable_pairs": comparable == rule["required_comparable_pairs"],
+        "maximum_candidate_harm": harm <= rule["maximum_candidate_harm"],
+        "required_r1a_passes_on_act_probe_verify": r1a_required_passes >= rule["required_r1a_passes_on_act_probe_verify"],
+        "minimum_r1a_passes_on_preserve_replicates": r1a_preserve_passes >= rule["minimum_r1a_passes_on_preserve_replicates"],
+        "minimum_candidate_gain_on_preserve_replicates": preserve_gain >= rule["minimum_candidate_gain_on_preserve_replicates"],
+    }
+    return {
+        "passed": len(pairs) == rule["required_comparable_pairs"] and all(checks.values()),
+        "checks": checks,
+        "observed": {
+            "comparable_pairs": comparable,
+            "candidate_harm": harm,
+            "r1a_passes_on_act_probe_verify": r1a_required_passes,
+            "r1a_passes_on_preserve_replicates": r1a_preserve_passes,
+            "candidate_gain_on_preserve_replicates": preserve_gain,
+        },
+        "pass_status": rule["pass_status"],
+        "failure_action": rule["failure_action"],
+    }
+
+
 def command_generate(seed: str, output: pathlib.Path, as_json: bool) -> int:
     if not seed.strip():
         raise ValueError("execution seed must be non-empty")
@@ -388,13 +469,7 @@ def command_generate(seed: str, output: pathlib.Path, as_json: bool) -> int:
         manifest = build_manifest(seed, plan, staging)
         (staging / "bundle.json").write_text(json_text(manifest), encoding="utf-8")
         shutil.move(str(staging), str(output))
-    matrix = {
-        "include": [
-            {"case_id": case["id"], "arm": arm}
-            for case in manifest["cases"]
-            for arm in ARMS
-        ]
-    }
+    matrix = {"include": [{"case_id": case["id"], "arm": arm} for case in manifest["cases"] for arm in ARMS]}
     payload = {"bundle": str(output.resolve()), "seed": seed, "case_count": 12, "matrix": matrix}
     print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) if as_json else str(output.resolve()))
     return 0
@@ -406,8 +481,7 @@ def command_prepare(bundle: pathlib.Path, case_id: str, destination: pathlib.Pat
     case_root = validate_case_provenance(bundle, case)
     if destination.exists():
         raise FileExistsError(f"destination already exists: {destination}")
-    fixture = case_root / "visible" / "fixture"
-    shutil.copytree(fixture, destination)
+    shutil.copytree(case_root / "visible" / "fixture", destination)
     payload = {
         "case_id": case_id,
         "workspace": str(destination.resolve()),
@@ -434,6 +508,202 @@ def command_admit(bundle: pathlib.Path, as_json: bool) -> int:
     return 0 if passed else 1
 
 
+def command_record(
+    bundle: pathlib.Path,
+    case_id: str,
+    workspace: pathlib.Path,
+    receipt_path: pathlib.Path,
+    arm: str,
+    model_id: str,
+    harness_id: str,
+    transcript_path: pathlib.Path,
+    metrics_path: pathlib.Path,
+    run_config_path: pathlib.Path,
+    as_json: bool,
+) -> int:
+    if receipt_path.exists():
+        raise FileExistsError(f"receipt already exists: {receipt_path}")
+    if not workspace.is_dir():
+        raise FileNotFoundError(f"workspace does not exist: {workspace}")
+    if not transcript_path.is_file():
+        raise FileNotFoundError(f"transcript does not exist: {transcript_path}")
+    manifest = load_bundle(bundle)
+    case = find_case(manifest, case_id)
+    case_root = validate_case_provenance(bundle, case)
+    metrics = base.validate_metrics(json.loads(metrics_path.read_text(encoding="utf-8")))
+    run_config = base.load_run_config(run_config_path)
+    validate_run_binding(run_config, manifest, arm, model_id, harness_id)
+    transcript_bytes = transcript_path.read_bytes()
+    transcript_text = transcript_bytes.decode("utf-8", errors="replace")
+    members = treatment_set(manifest)
+    payload = {
+        "schema_version": 1,
+        "experiment": EXPERIMENT,
+        "arm": arm,
+        "model_id": model_id,
+        "harness_id": harness_id,
+        "bundle": {
+            "seed": manifest["seed"],
+            "plan_sha256": manifest["plan_sha256"],
+            "generator_sha256": manifest["generator_sha256"],
+            "contamination_status": manifest["contamination_status"],
+        },
+        "case": case,
+        "treatment": {
+            "loaded_sha256": members[arm],
+            "treatment_sha256s": members,
+            "treatment_set_sha256": base.canonical_sha256(members),
+            "git_blob": manifest["treatments"][arm]["git_blob"],
+        },
+        "workspace_sha256": base.sha256_tree(workspace),
+        "transcript": {"sha256": sha256_bytes(transcript_bytes), "bytes": len(transcript_bytes)},
+        "metrics": metrics,
+        "grade": grade_case(case_root, workspace, transcript_text),
+        "run_config": run_config,
+    }
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    receipt_path.write_text(json_text(payload), encoding="utf-8")
+    print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) if as_json else str(receipt_path.resolve()))
+    return 0
+
+
+def load_receipt(path: pathlib.Path, manifest: dict) -> dict:
+    if not path.is_file():
+        raise FileNotFoundError(f"receipt does not exist: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != 1 or payload.get("experiment") != EXPERIMENT:
+        raise ValueError(f"invalid selection receipt identity: {path}")
+    arm = payload.get("arm")
+    if arm not in ARMS:
+        raise ValueError(f"invalid selection receipt arm: {path}")
+    case_raw = payload.get("case")
+    if not isinstance(case_raw, dict) or not isinstance(case_raw.get("id"), str):
+        raise ValueError(f"invalid selection receipt case: {path}")
+    expected_case = find_case(manifest, case_raw["id"])
+    if case_raw != expected_case:
+        raise ValueError(f"selection receipt case provenance mismatch: {path}")
+    expected_bundle = {
+        "seed": manifest["seed"],
+        "plan_sha256": manifest["plan_sha256"],
+        "generator_sha256": manifest["generator_sha256"],
+        "contamination_status": manifest["contamination_status"],
+    }
+    if payload.get("bundle") != expected_bundle:
+        raise ValueError(f"selection receipt bundle provenance mismatch: {path}")
+    members = treatment_set(manifest)
+    treatment = payload.get("treatment")
+    expected_treatment = {
+        "loaded_sha256": members[arm],
+        "treatment_sha256s": members,
+        "treatment_set_sha256": base.canonical_sha256(members),
+        "git_blob": manifest["treatments"][arm]["git_blob"],
+    }
+    if treatment != expected_treatment:
+        raise ValueError(f"selection receipt treatment provenance mismatch: {path}")
+    payload["metrics"] = base.validate_metrics(payload.get("metrics"))
+    grade = payload.get("grade")
+    if not isinstance(grade, dict) or not isinstance(grade.get("passed"), bool):
+        raise ValueError(f"invalid selection receipt grade: {path}")
+    run_config_raw = payload.get("run_config")
+    if not isinstance(run_config_raw, dict):
+        raise ValueError(f"invalid selection receipt run config: {path}")
+    value = base.validate_run_config(run_config_raw.get("value"))
+    run_config = {
+        "value": value,
+        "sha256": base.canonical_sha256(value),
+        "matched_sha256": base.canonical_sha256(value["matched"]),
+    }
+    if run_config_raw.get("sha256") != run_config["sha256"] or run_config_raw.get("matched_sha256") != run_config["matched_sha256"]:
+        raise ValueError(f"selection receipt run-config hash mismatch: {path}")
+    validate_run_binding(run_config, manifest, arm, payload.get("model_id"), payload.get("harness_id"))
+    payload["run_config"] = run_config
+    return payload
+
+
+def compare_pair(case: dict, r1: dict | None, r1a: dict | None, duplicate: bool = False) -> dict:
+    issues = []
+    if duplicate:
+        issues.append("duplicate arm receipt")
+    if r1 is None:
+        issues.append("missing R1 receipt")
+    if r1a is None:
+        issues.append("missing R1A receipt")
+    if r1 is not None and r1a is not None:
+        if r1["bundle"] != r1a["bundle"]:
+            issues.append("bundle provenance mismatch")
+        if r1["treatment"]["treatment_set_sha256"] != r1a["treatment"]["treatment_set_sha256"]:
+            issues.append("treatment set mismatch")
+        if r1["run_config"]["matched_sha256"] != r1a["run_config"]["matched_sha256"]:
+            issues.append("matched run config mismatch")
+    comparable = not issues
+    effect = classify_effect(r1["grade"]["passed"], r1a["grade"]["passed"]) if comparable else "not_comparable"
+    arms = {}
+    for arm, receipt in (("R1", r1), ("R1A", r1a)):
+        if receipt is not None:
+            arms[arm] = {"passed": receipt["grade"]["passed"], "metrics": receipt["metrics"]}
+    return {
+        "case_id": case["id"],
+        "pair_id": case["pair_id"],
+        "cell_id": case["cell_id"],
+        "role": case["role"],
+        "comparable": comparable,
+        "issues": issues,
+        "effect": effect,
+        "arms": arms,
+    }
+
+
+def command_summarize(bundle: pathlib.Path, receipt_paths: list[pathlib.Path], as_json: bool) -> int:
+    manifest = load_bundle(bundle, require_current=False)
+    grouped: dict[str, dict[str, dict]] = {}
+    duplicates: set[str] = set()
+    global_issues = []
+    expected_ids = {case["id"] for case in manifest["cases"]}
+    for path in receipt_paths:
+        receipt = load_receipt(path, manifest)
+        case_id = receipt["case"]["id"]
+        if case_id not in expected_ids:
+            global_issues.append(f"unexpected case receipt: {case_id}")
+            continue
+        arms = grouped.setdefault(case_id, {})
+        arm = receipt["arm"]
+        if arm in arms:
+            duplicates.add(case_id)
+        else:
+            arms[arm] = receipt
+    pairs = []
+    for case in manifest["cases"]:
+        arms = grouped.get(case["id"], {})
+        pairs.append(compare_pair(case, arms.get("R1"), arms.get("R1A"), case["id"] in duplicates))
+    decision = evaluate_decision(pairs, manifest["decision_rule"])
+    infrastructure_valid = (
+        len(receipt_paths) == 24
+        and not global_issues
+        and all(pair["comparable"] for pair in pairs)
+        and manifest["contamination_status"] == "mechanically-clean"
+    )
+    if not infrastructure_valid:
+        decision = {**decision, "passed": False, "infrastructure_valid": False}
+    else:
+        decision = {**decision, "infrastructure_valid": True}
+    payload = {
+        "schema_version": 1,
+        "experiment": EXPERIMENT,
+        "bundle": {
+            "seed": manifest["seed"],
+            "plan_sha256": manifest["plan_sha256"],
+            "generator_sha256": manifest["generator_sha256"],
+            "contamination_status": manifest["contamination_status"],
+        },
+        "infrastructure_valid": infrastructure_valid,
+        "issues": global_issues,
+        "pairs": pairs,
+        "decision": decision,
+    }
+    print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) if as_json else ("PASS" if decision["passed"] else "FAIL"))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -449,6 +719,22 @@ def build_parser() -> argparse.ArgumentParser:
     admit = subparsers.add_parser("admit")
     admit.add_argument("bundle", type=pathlib.Path)
     admit.add_argument("--json", action="store_true")
+    record = subparsers.add_parser("record")
+    record.add_argument("bundle", type=pathlib.Path)
+    record.add_argument("case_id")
+    record.add_argument("workspace", type=pathlib.Path)
+    record.add_argument("receipt", type=pathlib.Path)
+    record.add_argument("--arm", choices=ARMS, required=True)
+    record.add_argument("--model-id", required=True)
+    record.add_argument("--harness-id", required=True)
+    record.add_argument("--transcript", type=pathlib.Path, required=True)
+    record.add_argument("--metrics", type=pathlib.Path, required=True)
+    record.add_argument("--run-config", type=pathlib.Path, required=True)
+    record.add_argument("--json", action="store_true")
+    summarize = subparsers.add_parser("summarize")
+    summarize.add_argument("bundle", type=pathlib.Path)
+    summarize.add_argument("receipts", nargs="+", type=pathlib.Path)
+    summarize.add_argument("--json", action="store_true")
     return parser
 
 
@@ -461,6 +747,13 @@ def main(argv: list[str] | None = None) -> int:
             return command_prepare(args.bundle, args.case_id, args.destination, args.json)
         if args.command == "admit":
             return command_admit(args.bundle, args.json)
+        if args.command == "record":
+            return command_record(
+                args.bundle, args.case_id, args.workspace, args.receipt, args.arm,
+                args.model_id, args.harness_id, args.transcript, args.metrics, args.run_config, args.json,
+            )
+        if args.command == "summarize":
+            return command_summarize(args.bundle, args.receipts, args.json)
         raise ValueError(f"unsupported command: {args.command}")
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
