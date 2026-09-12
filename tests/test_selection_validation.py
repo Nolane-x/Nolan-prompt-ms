@@ -198,7 +198,7 @@ class SelectionValidationGradingTests(unittest.TestCase):
             self.assertFalse(reexec["passed"], reexec)
             self.assertFalse(reexec["checks"]["fresh_reexecution_reaches_target"])
 
-    def test_generator_admits_only_reference-pass_cases(self):
+    def test_generator_admits_only_reference_pass_cases(self):
         hidden_manifest = json.loads((self.root / "hidden" / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(len(hidden_manifest["cases"]), 12)
         for case in hidden_manifest["cases"]:
