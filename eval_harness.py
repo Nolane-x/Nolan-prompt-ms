@@ -90,7 +90,7 @@ def load_receipt(path: pathlib.Path) -> dict:
     harness_id = payload.get("harness_id")
     if not isinstance(case_id, str) or not case_id.strip():
         raise ValueError(f"invalid receipt case_id in {path}")
-    if not isinstance(pair_id, str) or not isinstance(replicate, int):
+    if not isinstance(pair_id, str) or isinstance(replicate, bool) or not isinstance(replicate, int):
         raise ValueError(f"invalid receipt trial identity in {path}")
     if not isinstance(model_id, str) or not isinstance(harness_id, str):
         raise ValueError(f"invalid receipt trial identity in {path}")
@@ -99,6 +99,9 @@ def load_receipt(path: pathlib.Path) -> dict:
     grade = payload.get("grade")
     if not isinstance(grade, dict) or not isinstance(grade.get("passed"), bool):
         raise ValueError(f"invalid receipt grade in {path}")
+    provenance = payload.get("eval_provenance")
+    if not isinstance(provenance, dict):
+        raise ValueError(f"invalid receipt eval_provenance in {path}")
     return payload
 
 
@@ -110,6 +113,14 @@ def classify_effect(u0_passed: bool, u1_passed: bool) -> str:
     if not u0_passed and u1_passed:
         return "u1_gain"
     return "u1_harm"
+
+
+def paired_config_issues(replicate: int, u0: dict, u1: dict) -> list[str]:
+    issues = []
+    for field in ("model_id", "harness_id", "eval_provenance"):
+        if u0[field] != u1[field]:
+            issues.append(f"replicate {replicate} {field} mismatch")
+    return issues
 
 
 def run_grader(case_id: str, workspace: pathlib.Path) -> dict:
@@ -270,8 +281,16 @@ def command_summarize(receipt_paths: list[pathlib.Path], as_json: bool) -> int:
         counts = {name: 0 for name in EFFECT_NAMES}
         for replicate, conditions in sorted(by_replicate.items()):
             missing = [condition for condition in ("U0", "U1") if condition not in conditions]
+            replicate_issues: list[str] = []
             if missing:
-                issues.append(f"replicate {replicate} missing {'/'.join(missing)}")
+                replicate_issues.append(f"replicate {replicate} missing {'/'.join(missing)}")
+            else:
+                replicate_issues.extend(
+                    paired_config_issues(replicate, conditions["U0"], conditions["U1"])
+                )
+
+            if replicate_issues:
+                issues.extend(replicate_issues)
                 effect = "not_comparable"
             else:
                 effect = classify_effect(
