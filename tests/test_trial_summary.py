@@ -269,6 +269,23 @@ class TrialSummaryTests(unittest.TestCase):
             self.assertTrue(any("matched run config" in issue for issue in pair["issues"]))
             self.assertEqual(pair["replicates"][0]["effect"], "not_comparable")
 
+    def test_summarize_rejects_tampered_run_config_hashes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            u0_receipt, u1_receipt = self.make_paired_receipts(root)
+            changed = json.loads(u1_receipt.read_text(encoding="utf-8"))
+            changed["run_config"]["value"]["matched"]["limits"]["max_output_tokens"] = 9000
+            u1_receipt.write_text(json.dumps(changed), encoding="utf-8")
+
+            result = self.run_harness(
+                "summarize",
+                str(u0_receipt),
+                str(u1_receipt),
+                "--json",
+            )
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("run config", result.stderr.lower())
+
     def test_summarize_rejects_duplicate_condition_replicate_without_last_file_wins(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
