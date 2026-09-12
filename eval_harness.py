@@ -358,7 +358,7 @@ def command_record(
     harness_id: str,
     transcript_path: pathlib.Path,
     metrics_path: pathlib.Path,
-    run_config_path: pathlib.Path | None,
+    run_config_path: pathlib.Path,
     as_json: bool,
 ) -> int:
     find_case(case_id)
@@ -380,9 +380,8 @@ def command_record(
         raise ValueError(f"unsupported condition: {condition}")
 
     metrics = validate_metrics(json.loads(metrics_path.read_text(encoding="utf-8")))
-    run_config = load_run_config(run_config_path) if run_config_path is not None else None
-    if run_config is not None:
-        validate_run_config_binding(run_config, condition, model_id, harness_id)
+    run_config = load_run_config(run_config_path)
+    validate_run_config_binding(run_config, condition, model_id, harness_id)
     case_root = CASES / case_id
     eval_provenance = {
         "harness_sha256": sha256_file(HARNESS),
@@ -410,9 +409,8 @@ def command_record(
         },
         "metrics": metrics,
         "grade": grade,
+        "run_config": run_config,
     }
-    if run_config is not None:
-        payload["run_config"] = run_config
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
@@ -538,7 +536,7 @@ def build_parser() -> argparse.ArgumentParser:
     record_parser.add_argument("--harness-id", required=True)
     record_parser.add_argument("--transcript", required=True, type=pathlib.Path)
     record_parser.add_argument("--metrics", required=True, type=pathlib.Path)
-    record_parser.add_argument("--run-config", type=pathlib.Path)
+    record_parser.add_argument("--run-config", required=True, type=pathlib.Path)
     record_parser.add_argument("--json", action="store_true", dest="as_json")
 
     summarize_parser = subparsers.add_parser(
