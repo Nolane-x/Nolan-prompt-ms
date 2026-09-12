@@ -13,18 +13,20 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch the two preregistered target-authority ablations
+      - name: Dispatch preregistered target-authority stability replicates
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          for case_id in username-normalization-noop username-normalization-partial; do
-            gh workflow run semantic-ablation.yml \
-              --repo "$GITHUB_REPOSITORY" \
-              --ref main \
-              -f case_id="$case_id" \
-              -f model=auto \
-              -f reasoning_effort=default \
-              -f replicate=1
+          for replicate in 2 3; do
+            for case_id in username-normalization-noop username-normalization-partial; do
+              gh workflow run semantic-ablation.yml \
+                --repo "$GITHUB_REPOSITORY" \
+                --ref main \
+                -f case_id="$case_id" \
+                -f model=auto \
+                -f reasoning_effort=default \
+                -f replicate="$replicate"
+            done
           done
