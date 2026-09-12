@@ -47,7 +47,7 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
     def test_pair_pins_one_cli_version_and_summarizes_both_receipts(self):
         text = self.workflow_text()
         self.assertIn("npm view @github/copilot version", text)
-        self.assertIn("needs: resolve", text)
+        self.assertIn("needs: [validate, resolve]", text)
         self.assertIn('@github/copilot@${{ needs.resolve.outputs.copilot_version }}', text)
         self.assertIn("actions/download-artifact@v4", text)
         self.assertIn("python eval_harness.py summarize", text)
