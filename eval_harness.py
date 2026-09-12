@@ -95,7 +95,6 @@ def command_prepare(case_id: str, destination: pathlib.Path, as_json: bool) -> i
         "case_id": case_id,
         "workspace": str(destination.resolve()),
         "prompt": case["prompt"],
-        "expected_output": case["expected_output"],
     }
     if as_json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
