@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "phase": "selection-validation",
+  "incumbent": "verified-delta/SKILL.md",
+  "candidate": "evals/candidates/r1-target-authority.md",
+  "case_keys": [
+    "config-noop",
+    "config-required",
+    "writing-noop",
+    "writing-required",
+    "data-noop",
+    "data-required"
+  ],
+  "domains": ["config", "writing", "data"],
+  "modes": ["noop", "required"],
+  "replicates": [1],
+  "max_model_trials": 12,
+  "generation_contract": {
+    "task_payload_visibility_before_run": "none",
+    "source": "frozen deterministic runtime generator",
+    "seed": "generated after workflow start",
+    "same_pack_for_both_arms": true,
+    "publish_after_run": ["seed", "pack_sha256", "sealed_pack"]
+  },
+  "grading_contract": {
+    "type": "deterministic final-workspace state",
+    "grader_visible_to_agent": false,
+    "noop_requires_pristine_target_state": true,
+    "required_action_requires_exact_target_state": true
+  },
+  "matching_contract": {
+    "same_pack_sha256": true,
+    "same_actual_model": true,
+    "same_actual_reasoning_effort": true,
+    "same_actual_tool_set": true,
+    "same_harness_and_cli": true
+  },
+  "contamination_rule": "Any pre-run disclosure of generated task payloads or answers invalidates the affected selection case.",
+  "decision_rule": {
+    "required_action_candidate_harm_max": 0,
+    "candidate_pass_min": 6,
+    "noop_candidate_gain_min": 1,
+    "on_failure": "stop_without_rewriting_candidate",
+    "on_pass": "advance_to_final_hidden_holdout_without_candidate_rewrite"
+  },
+  "final_hidden_holdout": {
+    "status": "locked",
+    "may_open_only_after_selection_pass": true
+  }
+}
