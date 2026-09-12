@@ -14,6 +14,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent
 MANIFEST = ROOT / "evals" / "evals.json"
 CASES = ROOT / "evals" / "cases"
+SKILL = ROOT / "verified-delta" / "SKILL.md"
 
 
 def load_manifest() -> dict:
@@ -126,8 +127,6 @@ def command_record(
     metrics_path: pathlib.Path,
     as_json: bool,
 ) -> int:
-    if condition != "U0":
-        raise ValueError(f"unsupported condition: {condition}")
     find_case(case_id)
     if not workspace.is_dir():
         raise FileNotFoundError(f"workspace does not exist: {workspace}")
@@ -135,6 +134,13 @@ def command_record(
         raise FileNotFoundError(f"transcript does not exist: {transcript_path}")
     if not metrics_path.is_file():
         raise FileNotFoundError(f"metrics do not exist: {metrics_path}")
+
+    if condition == "U0":
+        skill = {"loaded": False, "sha256": None}
+    elif condition == "U1":
+        skill = {"loaded": True, "sha256": sha256_file(SKILL)}
+    else:
+        raise ValueError(f"unsupported condition: {condition}")
 
     workspace_sha256 = sha256_tree(workspace)
     grade = run_grader(case_id, workspace)
@@ -148,7 +154,7 @@ def command_record(
         "replicate": replicate,
         "model_id": model_id,
         "harness_id": harness_id,
-        "skill": {"loaded": False, "sha256": None},
+        "skill": skill,
         "workspace_sha256": workspace_sha256,
         "transcript": {
             "sha256": hashlib.sha256(transcript_bytes).hexdigest(),
@@ -190,7 +196,7 @@ def build_parser() -> argparse.ArgumentParser:
     record_parser.add_argument("case_id")
     record_parser.add_argument("workspace", type=pathlib.Path)
     record_parser.add_argument("receipt", type=pathlib.Path)
-    record_parser.add_argument("--condition", required=True, choices=("U0",))
+    record_parser.add_argument("--condition", required=True, choices=("U0", "U1"))
     record_parser.add_argument("--pair-id", required=True)
     record_parser.add_argument("--replicate", required=True, type=int)
     record_parser.add_argument("--model-id", required=True)
