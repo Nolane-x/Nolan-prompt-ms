@@ -128,6 +128,8 @@ def command_record(
     as_json: bool,
 ) -> int:
     find_case(case_id)
+    if receipt_path.exists():
+        raise FileExistsError(f"receipt already exists: {receipt_path}")
     if not workspace.is_dir():
         raise FileNotFoundError(f"workspace does not exist: {workspace}")
     if not transcript_path.is_file():
