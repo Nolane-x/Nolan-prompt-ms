@@ -47,6 +47,19 @@ A materially shorter rival that is non-inferior on the preregistered behavioral 
 
 If no-guidance performs equivalently, prefer no added guidance until an observed failure creates a residency claim.
 
+## Controller Locus Discipline
+
+Do not confuse **what the controller says** with **where control is implemented**. Treat these as separate intervention loci:
+
+- prompt / skill semantics;
+- explicit state or belief representation;
+- context-selection / assembly policy;
+- external validation, action gating, or repair feedback in the harness.
+
+Credit an improvement to the layer that causally produced it. A harness-blocked invalid action is not evidence of prompt compliance; a better state estimator is not evidence that longer instructions are better.
+
+When a deterministic or harness-level mechanism can enforce an invariant more reliably and cheaply than prose, prefer that mechanism and shrink runtime guidance to the residual behavior that still needs model judgment.
+
 ## Evidence Before Expansion
 
 No rule enters the core because it sounds wise.
