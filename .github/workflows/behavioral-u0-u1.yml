@@ -50,6 +50,7 @@ jobs:
       MODEL_ID: ${{ inputs.model }}
       REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       REPLICATE: ${{ inputs.replicate }}
+      HARNESS_ID: github-copilot-actions-v1
       GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -60,7 +61,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Prepare isolated agent-visible workspace
+      - name: Prepare isolated agent-visible workspace and treatment prompt
         shell: bash
         run: |
           set -euo pipefail
@@ -68,7 +69,7 @@ jobs:
           WORKSPACE="$TRIAL_ROOT/workspace"
           mkdir -p "$TRIAL_ROOT"
           python eval_harness.py prepare "$CASE_ID" "$WORKSPACE" --json > "$TRIAL_ROOT/prepare.json"
-          python - "$TRIAL_ROOT/prepare.json" "$TRIAL_ROOT/prompt.txt" <<'PY'
+          python - "$TRIAL_ROOT/prepare.json" "$TRIAL_ROOT/task-prompt.txt" <<'PY'
           import json
           import pathlib
           import sys
@@ -79,8 +80,22 @@ jobs:
           target.write_text(payload["prompt"] + "\n", encoding="utf-8")
           PY
 
+          if [ "$CONDITION" = "U1" ]; then
+            {
+              cat verified-delta/SKILL.md
+              printf '\n\n---\n\n'
+              cat "$TRIAL_ROOT/task-prompt.txt"
+            } > "$TRIAL_ROOT/prompt.txt"
+          else
+            cp "$TRIAL_ROOT/task-prompt.txt" "$TRIAL_ROOT/prompt.txt"
+          fi
+
       - name: Install Copilot CLI
-        run: npm install -g @github/copilot
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g @github/copilot
+          copilot --version > "$RUNNER_TEMP/vd-trial/copilot-version.txt"
 
       - name: Run isolated Copilot trial
         shell: bash
@@ -125,6 +140,148 @@ jobs:
               cat "$TRIAL_ROOT/copilot.stderr.txt"
             } > "$TRIAL_ROOT/transcript.md"
           fi
+
+      - name: Build causal config and immutable receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRIAL_ROOT="$RUNNER_TEMP/vd-trial"
+          WORKSPACE="$TRIAL_ROOT/workspace"
+          COPILOT_STATUS=$(cat "$TRIAL_ROOT/copilot.exit-code.txt")
+          COPILOT_VERSION=$(head -n 1 "$TRIAL_ROOT/copilot-version.txt" | tr -d '\r')
+          WALL_TIME_MS=$(cat "$TRIAL_ROOT/wall-time-ms.txt")
+          PAIR_ID="gh-${GITHUB_RUN_ID}-${CASE_ID}"
+
+          if [ "$COPILOT_STATUS" != "0" ]; then
+            python - "$TRIAL_ROOT/infrastructure-error.json" "$COPILOT_STATUS" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          pathlib.Path(sys.argv[1]).write_text(
+              json.dumps(
+                  {
+                      "kind": "copilot_cli_nonzero_exit",
+                      "exit_code": int(sys.argv[2]),
+                  },
+                  indent=2,
+                  sort_keys=True,
+              ) + "\n",
+              encoding="utf-8",
+          )
+          PY
+            echo "Copilot CLI exited nonzero; retaining raw evidence but not creating a behavioral receipt." >&2
+            exit 1
+          fi
+
+          python - "$TRIAL_ROOT/metrics.json" "$WALL_TIME_MS" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          payload = {
+              "input_tokens": None,
+              "output_tokens": None,
+              "tool_calls": None,
+              "wall_time_ms": int(sys.argv[2]),
+          }
+          pathlib.Path(sys.argv[1]).write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+          python - \
+            "$TRIAL_ROOT/run-config.json" \
+            "$CONDITION" \
+            "$MODEL_ID" \
+            "$REASONING_EFFORT" \
+            "$COPILOT_VERSION" \
+            "$HARNESS_ID" \
+            "$GITHUB_RUN_ID" \
+            "$GITHUB_RUN_ATTEMPT" \
+            "$CASE_ID" \
+            "$REPLICATE" <<'PY'
+          import datetime
+          import json
+          import os
+          import pathlib
+          import sys
+
+          (
+              output,
+              condition,
+              model_id,
+              reasoning_effort,
+              copilot_version,
+              harness_id,
+              run_id,
+              run_attempt,
+              case_id,
+              replicate,
+          ) = sys.argv[1:]
+
+          is_u1 = condition == "U1"
+          payload = {
+              "schema_version": 1,
+              "matched": {
+                  "prompt_language": "en",
+                  "model": {
+                      "provider": "github-copilot-cli",
+                      "id": model_id,
+                      "snapshot": "provider-managed-unpinned",
+                  },
+                  "harness": {
+                      "id": harness_id,
+                      "version": copilot_version,
+                      "runner_os": os.environ.get("RUNNER_OS", "unknown"),
+                      "runner_arch": os.environ.get("RUNNER_ARCH", "unknown"),
+                  },
+                  "tool_set": ["bash", "apply_patch", "create", "edit", "view", "glob", "grep"],
+                  "tool_policy": {
+                      "allow": "write,shell(python:*)",
+                      "builtin_mcps": False,
+                      "custom_instructions": False,
+                      "agent_cwd": "isolated-runner-temp-workspace",
+                  },
+                  "reasoning_effort": reasoning_effort,
+                  "sampling_controls": None,
+                  "limits": {
+                      "job_timeout_minutes": 10,
+                  },
+              },
+              "intervention": {
+                  "delivery_form": "force-loaded-skill" if is_u1 else "none",
+                  "metadata_language": "en" if is_u1 else None,
+                  "body_language": "en" if is_u1 else None,
+                  "description_variant": "current" if is_u1 else None,
+                  "available_skill_set_sha256": None,
+              },
+              "trial": {
+                  "clean_environment_id": f"gha-{run_id}-attempt-{run_attempt}-{condition}",
+                  "trial_id": f"gha-{run_id}-{case_id}-{condition}-r{replicate}",
+                  "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
+              },
+          }
+          pathlib.Path(output).write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+          python eval_harness.py record \
+            "$CASE_ID" \
+            "$WORKSPACE" \
+            "$TRIAL_ROOT/receipt.json" \
+            --condition "$CONDITION" \
+            --pair-id "$PAIR_ID" \
+            --replicate "$REPLICATE" \
+            --model-id "$MODEL_ID" \
+            --harness-id "$HARNESS_ID" \
+            --transcript "$TRIAL_ROOT/transcript.md" \
+            --metrics "$TRIAL_ROOT/metrics.json" \
+            --run-config "$TRIAL_ROOT/run-config.json" \
+            --json > "$TRIAL_ROOT/record-output.json"
 
       - name: Preserve raw trial evidence
         if: always()
