@@ -43,9 +43,9 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
         self.assertIn("python eval_harness.py record", text)
         self.assertIn("--run-config", text)
         self.assertIn("receipt.json", text)
-        self.assertIn('"input_tokens": null', text)
-        self.assertIn('"output_tokens": null', text)
-        self.assertIn('"tool_calls": null', text)
+        self.assertIn('"input_tokens": None', text)
+        self.assertIn('"output_tokens": None', text)
+        self.assertIn('"tool_calls": None', text)
 
 
 if __name__ == "__main__":
