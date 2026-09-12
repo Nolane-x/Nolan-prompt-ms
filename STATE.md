@@ -28,7 +28,7 @@ Verified Delta is the incumbent, not protected architecture. Its wording, tuple,
 
 - Canonical repository: `Nolane-x/Nolane-prompt-ms`.
 - `verified-delta/SKILL.md` remains the single-file runtime package: **446 words**, zero runtime dependencies.
-- The runtime kernel has **not** been edited during the eval-lab or fresh-runner hardening work.
+- The runtime kernel has **not** been edited during the eval-lab, fresh-runner, or causal-config hardening work.
 - `EVALS.md` keeps **Activation, RED baseline, GREEN comparison, Ablation, and Cross-domain holdout OPEN**.
 - Deterministic repository/eval-infrastructure verification is separate from behavioral verification.
 - Agent Skills format validation does not treat the project's `Use when...` wording preference or ≤500-word compression target as syntax laws. The ≤500-word value remains research pressure only.
@@ -39,8 +39,8 @@ Verified Delta is the incumbent, not protected architecture. Its wording, tuple,
 The first utility pack is deterministic and intentionally opposing:
 
 1. `username-normalization-noop` — the reported defect is already absent; unnecessary production change fails.
-2. `username-normalization-partial` — matched report, but a real defect remains; pristine/no-op behavior fails and a focused production change passes. The grader uses a diverse deterministic normalization probe set rather than two memorized public examples.
-3. `false-completion-state` — baseline `apply.py` reports success and exits 0 while authoritative state stays wrong. The grader functionally re-executes the candidate command in a clean sandbox and separately checks final workspace state, so direct state edits or forgeable invocation receipts cannot substitute for a working command.
+2. `username-normalization-partial` — matched report, but a real defect remains; pristine/no-op behavior fails and a focused production change is required.
+3. `false-completion-state` — `apply.py` can report success while authoritative state remains wrong; the grader functionally re-executes the candidate command and separately checks final state.
 
 `eval_harness.py` provides:
 
@@ -52,20 +52,33 @@ The first utility pack is deterministic and intentionally opposing:
 
 The full repo/manifest/grader/`list` output is researcher-side material. A clean evaluated agent should receive only the intended condition, the `prepare` prompt, and the prepared workspace.
 
+## Causal Run-Configuration Contract
+
+Every new receipt requires `--run-config`. The structured configuration has three roles:
+
+- `matched` — causal context that must match across U0/U1: prompt language, provider/model/snapshot, harness/version, tool set and policy, reasoning effort, sampling controls, and resource limits;
+- `intervention` — condition-specific delivery metadata: U0 uses `delivery_form=none`; U1 uses `delivery_form=force-loaded-skill`, with metadata/body language, description variant, and available-skill-set hash retained explicitly;
+- `trial` — clean-environment ID, trial ID, and UTC timestamp.
+
+The harness validates schema and required identities, rejects duplicate tools or malformed hashes/timestamps, cross-checks model/harness identity and delivery form against top-level trial fields, and records both canonical full-config SHA-256 and a canonical `matched` SHA-256.
+
+Receipt loading is fail-closed: missing run-config evidence, invalid schema, internal identity/intervention contradiction, or stale/tampered config hashes are rejected. Two individually valid U0/U1 receipts with different `matched` hashes are retained but classified `not_comparable`; they are not allowed to manufacture a treatment effect.
+
 ### Receipt contract
 
-Receipt records bind:
+Each receipt binds:
 
 - case / condition / pair / replicate;
 - model and external harness identity;
 - exact U1 runtime-skill SHA-256, or explicit no-skill U0 state;
+- validated structured run configuration plus full/matched hashes;
 - final workspace SHA-256;
 - transcript SHA-256 and byte count;
-- supplied cost metrics;
+- canonical cost metrics (`input_tokens`, `output_tokens`, `tool_calls`, `wall_time_ms`), with extra provider metrics allowed;
 - deterministic grader result;
 - exact eval-harness, manifest, fixture, and grader SHA-256 provenance.
 
-`pair_id`, `model_id`, and `harness_id` must be non-empty; `replicate >= 1`. Canonical metrics are `input_tokens`, `output_tokens`, `tool_calls`, and `wall_time_ms`; all four keys are required and each value is `null` or a non-negative integer. Extra provider metrics are allowed. Existing receipt paths are rejected instead of overwritten.
+Existing receipt paths are rejected instead of overwritten. Keep every replicate, including failures.
 
 ### Summary contract
 
@@ -76,20 +89,27 @@ Summary groups by `case_id + pair_id` and preserves each replicate:
 - both pass → `same_pass`;
 - both fail → `same_fail`.
 
-A replicate is `not_comparable` when one condition is missing, model/harness identity differs, evaluator provenance differs, or duplicate receipts claim the same condition and replicate. Duplicate input cannot use last-file-wins semantics. Summary does not emit a universal aggregate score.
+A valid pair is `not_comparable` when one condition is missing, matched causal context differs, model/harness identity differs, evaluator provenance differs, or duplicate receipts claim the same condition and replicate. Invalid/tampered receipts are rejected before comparison. No universal aggregate score is emitted.
 
-### Test-first evidence for fresh-runner hardening
+### Test-first evidence
 
-Relevant GREEN runs after the original pack include:
+Fresh-runner and causal-config infrastructure was built in isolated RED→GREEN slices. Relevant GREEN runs include:
 
 - agent-safe `prepare` boundary: `34671916622`;
 - canonical metrics validation: `34671994103`;
 - trial identity validation: `34672058813`;
 - paired U0/U1 summary: `34672166288`;
 - mismatched-config rejection: `34672244402`;
-- duplicate condition/replicate rejection: `34672328794`.
+- duplicate condition/replicate rejection: `34672328794`;
+- canonical run-config binding: `34672801141`;
+- run-config schema validation: `34673945952`;
+- identity/intervention binding: `34674028019`;
+- matched causal-context comparison: `34674167891`;
+- receipt self-integrity plus valid mismatch semantics: `34674299158`;
+- mandatory run-config at record boundary: `34674428856`;
+- mandatory run-config at receipt-ingress boundary: `34674620716`.
 
-Earlier pack GREEN evidence remains in git/Actions history, including anti-forgery false-completion grading (`34670974459`) and anti-hardcode normalization grading (`34671025273`).
+Earlier anti-forgery false-completion grading (`34670974459`) and anti-hardcode normalization grading (`34671025273`) remain part of the infrastructure history.
 
 All runs above are **infrastructure/regression evidence**, not evidence that Verified Delta improves an agent.
 
@@ -97,19 +117,21 @@ All runs above are **infrastructure/regression evidence**, not evidence that Ver
 
 No fresh isolated-agent U0/U1 comparison has been completed.
 
-The current conversation has read the skill, research state, eval design, expected failure families, and grader behavior; it is contaminated and cannot serve as a clean no-guidance control. Do not manufacture U0 or U1 behavioral evidence from this context.
+The current conversation has read the skill, research state, eval design, expected failure families, grader behavior, and run-config contract. It is contaminated and cannot serve as clean U0 or U1 behavioral evidence. Do not manufacture trials from this context.
 
 The next real experiment must use genuinely fresh model/agent contexts under matched configuration:
 
 - `U0`: no Verified Delta guidance;
 - `U1`: force-load the exact current `verified-delta/SKILL.md`;
-- same case, model snapshot, external harness, tools, budgets, reasoning/sampling controls, and other causal configuration;
-- clean workspace per trial;
-- retain every replicate and transcript, including failures;
-- record each trial through the immutable receipt contract;
-- use `summarize` only after receipts exist; inspect every `not_comparable`, `u1_harm`, and minority failure directly.
+- same case and exact `matched` run configuration;
+- clean workspace/environment per trial;
+- retain every transcript and replicate, including failures;
+- record each trial through the mandatory run-config receipt contract;
+- inspect every `not_comparable`, `u1_harm`, minority failure, and surprising grader result directly.
 
 Primary outcomes are final-task success and serious failure. Also retain no-op/action calibration, false completion, unnecessary actions, tool/token/time cost, and transcript evidence. A skill-induced failure (`U0` succeeds while `U1` fails) is first-class evidence, not noise.
+
+A structurally valid receipt still does **not** independently prove that the external model call, clean environment, or skill injection actually occurred. External runner evidence and transcripts remain necessary.
 
 ## Controller Hypotheses Still Alive
 
@@ -140,7 +162,7 @@ The unresolved question remains:
 ## Open Debts
 
 1. **Clean U0/U1 execution missing.** This is the immediate behavioral boundary.
-2. **Full external configuration is not yet a universal structured receipt field.** The experiment must still match and preserve tool policy, reasoning/sampling controls, budgets, provider snapshot details, and other causal settings through the external harness/transcript. Do not infer comparability merely because `model_id` and `harness_id` match.
+2. **External execution attestation remains external.** Structured receipts bind declared configuration but cannot independently prove model invocation, isolation, or skill injection.
 3. **Independent W5 r4 missing.** Do not self-sign it from this context.
 4. **Primitive competition unexecuted.** R0–R8 remain hypotheses.
 5. **Controller-locus factorization unexecuted.** Prompt vs explicit state vs verifier effects are unknown.
@@ -167,6 +189,7 @@ The unresolved question remains:
 - Trusting an agent-writable marker as proof that a command ran correctly.
 - Calling mismatched U0/U1 receipts a treatment effect.
 - Letting duplicate receipts resolve by input order.
+- Accepting missing or tampered run-config evidence as analyzable trial data.
 - Pooling languages, harnesses, tasks, repeated trials, or conflicting metrics into a convenient scalar.
 - Averaging away minority failures.
 - Overwriting old trial receipts.
@@ -177,7 +200,7 @@ The unresolved question remains:
 
 Do **not** edit `verified-delta/SKILL.md`.
 
-Use the hardened executable lab in a genuinely fresh isolated-agent/model harness and collect the first matched U0/U1 receipts for the three development cases. Start small, preserve the full external configuration, inspect every transcript, and decide whether the current skill produces any practically meaningful marginal utility without new passivity, ceremonial verification, unnecessary action, or excessive cost.
+Use the hardened executable lab in a genuinely fresh isolated-agent/model harness and collect the first matched U0/U1 receipts for the three development cases. Start small, preserve the exact structured causal configuration, retain independent runner evidence, inspect every transcript, and decide whether the current skill produces any practically meaningful marginal utility without new passivity, ceremonial verification, unnecessary action, or excessive cost.
 
 If U1 does not beat U0 on a target failure family, do not tune metadata to hide the result. Narrow, factor, replace, or remove guidance. If a benefit appears, expand only the failure families justified by that evidence before any wording optimization.
 
