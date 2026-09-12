@@ -22,18 +22,47 @@ Past-self state is a recovery aid, never authority.
 
 Maximize **behavioral leverage per token and per unit of controller complexity**.
 
-The current incumbent is Verified Delta, but its wording, tuple, name, skill packaging, and even prompt-level implementation are hypotheses. A shorter rival, an explicit state layer, a harness-level controller, or no added guidance may replace it if controlled evidence shows a better behavior/cost frontier.
+The current incumbent is Verified Delta, but its wording, tuple, name, skill packaging, size target, and even prompt-level implementation are hypotheses. Utility comes before compression. A shorter rival, a longer evidence-backed candidate, an explicit state layer, a harness-level controller, or no added guidance may replace the incumbent if controlled evidence shows a better behavior/cost frontier.
 
 ## Observed Repository State
 
 - `verified-delta/SKILL.md` remains the single-file runtime package, 446 words, zero runtime dependencies.
-- The runtime kernel has not been behaviorally edited during structural, multilingual, W5, primitive-competition, or controller-locus research.
+- The runtime kernel and its current description have not been behaviorally edited during structural, multilingual, W5, primitive-competition, controller-locus, or utility-first research.
 - `EVALS.md` keeps Activation, RED baseline, GREEN comparison, Ablation, and Cross-domain holdout OPEN.
-- `CONSTITUTION.md` now has both **Incumbent Has No Privilege** and **Controller Locus Discipline**.
-- Static CI on `main@359499fe2d3a7ff325f2783a88d1c2e97b03d4a7` passed unit tests and `python verify.py` after the previous W5 merge.
+- `CONSTITUTION.md` has **Incumbent Has No Privilege**, **Controller Locus Discipline**, and **Utility Before Compression**.
+- Static CI on `main@34a8534d759e1cc4f5f8a27f8de65ac61440c60a` passed unit tests and `python verify.py` after the controller-locus merge.
+- A test-first governance correction demonstrated that the old verifier wrongly treated project heuristics as Agent Skills syntax: it rejected valid descriptions that did not start with `Use when`, rejected descriptions above 500 characters even though the standard permits 1024, and rejected bodies above 500 words.
+- RED evidence: Actions run `34668529074` failed exactly on those four expectations while unrelated verifier tests passed.
+- GREEN evidence: Actions run `34668747588` passed all 13 verifier tests and `python verify.py` after deterministic validation was narrowed to non-empty description + 1024-character maximum and the hard 500-word acceptance gate was removed.
+- The **≤500-word** value remains a working compression target in the Constitution, not a deterministic validity rule.
 - No fresh isolated-agent U0/U1 behavioral comparison has been completed.
 
-Static checks, literature, W5 reasoning, conceptual coverage, and elegance are not behavioral verification.
+Static checks, literature, W5 reasoning, conceptual coverage, word count, and elegance are not behavioral verification.
+
+## Usefulness Research Frame
+
+A skill earns runtime residency only through **incremental utility**, not by restating good practice.
+
+For a matched task, compare no-guidance `U0` with force-loaded current-skill `U1` and retain the task as the primary paired unit. Record at least:
+
+- target-state success;
+- skill-induced functional failure: `U0` succeeds while `U1` fails;
+- serious/invariant failure;
+- false completion;
+- no-op versus necessary-action calibration;
+- unnecessary actions or ceremonial verification;
+- token/tool/time cost where available;
+- transcript evidence explaining the causal difference.
+
+The first utility round should stay deliberately small and discriminating. Start with three executable development cases rather than growing a benchmark before the cases prove useful:
+
+1. **Fully fixed / no-op:** the reported defect is already absent; the correct result is no production change.
+2. **Partially fixed opposing control:** surface wording is closely matched, but one real defect remains; the agent must change production state rather than generalizing no-op behavior into passivity.
+3. **False completion:** an intermediate tool/command reports success while the intended final state is still wrong; grading checks final state rather than the agent's claim or command exit status.
+
+Run each case in clean contexts with and without the skill. Do not tune the skill after seeing a final holdout. If a development case cannot discriminate the claimed behavior, repair or discard the case instead of optimizing prose against it.
+
+If the incumbent shows no practically meaningful benefit on high-signal failure families, do not rescue it by tuning metadata. Narrow, factor, replace, or remove guidance. If benefit appears only in one or two families, test whether narrower micro-skills beat the umbrella skill before claiming broad utility.
 
 ## W5 Research State
 
@@ -98,24 +127,13 @@ If R3 and R6 tie on such tasks, the extra receding-horizon concept has no reside
 
 Partial observability is not only “uncertainty in prose.” A history-conditioned LLM can collapse onto the wrong hidden state even when every individual observation is plausible.
 
-R7 predicts that an explicit belief/state layer will improve:
+R7 predicts that an explicit belief/state layer will improve calibration under ambiguous observations, consistency across sequential evidence, resistance to premature commitment, recovery after contradictory observations, and context efficiency when raw history is long.
 
-- calibration under ambiguous observations;
-- consistency across sequential evidence;
-- resistance to premature commitment;
-- recovery after contradictory observations;
-- context efficiency when raw history is long.
-
-A September 2026 preprint, *Belief-State Engine*, reports gains from external Bayesian belief tracking over history-conditioned LLM baselines on two POMDP-style domains. Treat this as fresh supporting evidence for the **test**, not as proof of generality or of R7 in this project.
+External belief-state research motivates the test but does not prove R7 for this project.
 
 ## Why R8 Is Distinct
 
-Several 2026 results point toward architecture-level control:
-
-- *Structured Feedback Improves Repair in an LLM Agent Loop* reports large paired gains when an external harness controls validation and returns failure location, observed value, and admissible alternatives.
-- *Stable Agentic Control* shows that deterministic tool/interface constraints can provide stability properties independent of the LLM's raw capability in its tested domain.
-- *Procedure-Aware Evaluation* shows that task success alone can conceal policy/integrity violations (“corrupt success”).
-- *Context Assembly as the Controlled Variable* treats the outer context policy as a control layer around a frozen model.
+External research on structured repair feedback, deterministic control, procedure-aware evaluation, evidence-carrying termination, and context assembly motivates testing architecture-level control rather than assuming every invariant belongs in prompt prose.
 
 These results motivate R8 and context-policy experiments. They do not prove that prompt guidance is useless.
 
@@ -137,8 +155,6 @@ Only add interaction arms when a main effect justifies the cost:
 - `CB+V` — belief + verifier;
 - full stack only if interactions remain decision-relevant.
 
-For every arm, report target success, serious failures, invariant violations, false completion, no-op errors, unnecessary actions, tokens/context, tool calls, latency/resources, and task-level reliability.
-
 Do **not** count behavior prevented by a harness gate as prompt compliance. Do **not** count a better state estimator as evidence that more prompt text helped.
 
 ### Decision law
@@ -153,7 +169,7 @@ Do **not** count behavior prevented by a harness gate as prompt compliance. Do *
 
 Do not optimize later layers before earlier causal questions are answered:
 
-1. **U0 vs U1** — no guidance vs force-loaded 446-word incumbent.
+1. **U0 vs U1** — no guidance vs force-loaded 446-word incumbent, beginning with the three utility cases above.
 2. **Primitive competition** — R0–R8 only if U1 demonstrates useful behavior.
 3. **Controller-locus factorization** — prompt vs belief/state vs verifier/context layer on failure families where locus matters.
 4. **Semantic ablation/compression** — only on the winning primitive/locus family.
@@ -163,49 +179,46 @@ Do not optimize later layers before earlier causal questions are answered:
 
 ## New Discriminating Failure Families
 
-Two new development families are required before primitive selection can be trusted:
-
 ### Myopic Minimality
 
 The locally smallest action appears attractive but creates a downstream dead end, invalid dependency, or much larger repair. The correct agent plans beyond the immediate patch while committing only the smallest safe prefix and re-observing before further commitment.
-
-This distinguishes “smallest current patch” from “smallest globally sufficient closed-loop intervention.”
 
 ### Premature Belief Collapse
 
 Sequential observations remain compatible with multiple hidden states. One vivid observation favors the wrong hypothesis but is not discriminating. The correct controller preserves alternative state hypotheses or a calibrated belief until a decisive observation/probe arrives.
 
-This distinguishes ordinary caution from explicit state-estimation robustness.
-
 These are development hypotheses, not evidence that new runtime wording is required.
 
-## Source-Grounded Findings Added in v6
+## Current External Evidence Pressure
 
-External evidence currently supports the research questions, not this implementation:
+External evidence supports the **tests**, not the incumbent wording:
 
-- *Belief-State Engine* (Sep 2026): external belief-state tracking can improve planning consistency/calibration under partial observability in its evaluated domains.
-- *Structured Feedback Improves Repair* (Jul 2026): validator-controlled repair feedback materially improves terminal success in paired TextWorld experiments; feedback content matters more than JSON syntax.
-- *Procedure-Aware Evaluation* (Mar 2026): reported task success can hide procedural/integrity violations; outcome-only scoring is insufficient.
-- *Stable Agentic Control* (May 2026): deterministic tool-mediated constraints can bound agent behavior independently of model capability in a cyber-defense setting.
-- *Context Assembly as the Controlled Variable* (Jul 2026): context selection itself can be treated as an outer controller around a frozen model.
-- *FixedBench* (May 2026): action bias persists on no-op tasks, and a prompt that reduces over-action can cause the opposite passivity failure on partially fixed tasks.
-- *SWE-Skills-Bench* and *Skill-Use* (2026): skill utility, triggering, compliance, and harness dependence must be measured rather than presumed.
-- *TextReg* (May 2026): iterative prompt optimization can grow narrow rules and overfit the development distribution.
+- recent Skill-Use results separate Trigger, Compliance, and Boundary and show material harness dependence;
+- SWE-Skills-Bench reports that most tested public SWE skills add no pass-rate gain while a small set of specialized skills do, so generic skill utility cannot be presumed;
+- SkillsBench reports heterogeneous skill effects, including negative task deltas, and favors focused skill sets over comprehensive documentation on its aggregate results;
+- 2026 skill-induced-failure analysis reports both functional failures and efficiency regressions caused by skills; excessive verification is a major excessive-procedure failure mode;
+- FixedBench exposes action bias on already-fixed issues and the opposing passivity failure when “reproduce before patch” is overgeneralized to partially fixed issues;
+- false-success research motivates grading final environment state rather than accepting agent/tool success claims;
+- official Agent Skills guidance recommends starting with a few realistic with-skill/without-skill evals, clean contexts, observable assertions, and cost measurement before expanding the suite.
+
+None of these sources establishes that Verified Delta improves this repository's target behavior.
 
 ## Open Debts
 
 1. **Clean U0/U1 missing.** This remains the first behavioral experiment.
-2. **Independent W5 r4 missing.** Current W5 world cannot advance honestly without a genuinely independent verifier.
-3. **Primitive competition unexecuted.** R0–R8 are hypotheses only.
-4. **Rival wording unpreregistered.** Do not write R2–R8 from hidden-holdout failures.
-5. **Controller-locus factorization unexecuted.** CP/CB/CV effects and interactions are unknown.
-6. **Myopic-minimality probe unexecuted.** R3 vs R6 remains unresolved.
-7. **Belief-collapse probe unexecuted.** Prompt uncertainty handling vs explicit belief state remains unresolved.
-8. **Activation / natural prevalence unmeasured.** Trigger, compliance, boundary, distractors, and real prevalence remain unknown.
-9. **Cross-lingual activation unmeasured.** L0–L3 remains protocol only.
-10. **Semantic ablation unexecuted.** Run only after a primitive/locus family earns optimization.
-11. **Hidden cross-domain/language holdout missing.** Final claims remain blocked.
-12. **Runtime portability unmeasured.** Claims remain harness-scoped until replicated.
+2. **Three-case executable utility pack missing.** Build and validate the no-op, partially-fixed, and false-completion cases before expanding benchmark breadth.
+3. **Independent W5 r4 missing.** Current W5 world cannot advance honestly without a genuinely independent verifier.
+4. **Primitive competition unexecuted.** R0–R8 are hypotheses only.
+5. **Rival wording unpreregistered.** Do not write R2–R8 from hidden-holdout failures.
+6. **Controller-locus factorization unexecuted.** CP/CB/CV effects and interactions are unknown.
+7. **Myopic-minimality probe unexecuted.** R3 vs R6 remains unresolved.
+8. **Belief-collapse probe unexecuted.** Prompt uncertainty handling vs explicit belief state remains unresolved.
+9. **Activation / natural prevalence unmeasured.** Trigger, compliance, boundary, distractors, and real prevalence remain unknown.
+10. **Cross-lingual activation unmeasured.** L0–L3 remains protocol only.
+11. **Semantic ablation unexecuted.** Run only after a primitive/locus family earns optimization.
+12. **Hidden cross-domain/language holdout missing.** Final claims remain blocked.
+13. **Runtime portability unmeasured.** Claims remain harness-scoped until replicated.
+14. **Umbrella-versus-micro-skill granularity unknown.** Factorization is a hypothesis only; do not split the runtime package without utility/activation evidence.
 
 ## Rejected Directions
 
@@ -215,6 +228,8 @@ External evidence currently supports the research questions, not this implementa
 - Deep reasoning on every task.
 - Multi-agent by default.
 - Treating past state as authority.
+- Equating behavioral leverage per token with a hard pre-evaluation word ceiling.
+- Treating `Use when...` as syntax rather than an activation wording hypothesis.
 - Optimizing metadata before content utility.
 - Optimizing incumbent prose before primitive/locus selection.
 - Treating shorter as automatically better.
@@ -224,14 +239,19 @@ External evidence currently supports the research questions, not this implementa
 - Using a balanced activation set as deployment prevalence.
 - Pooling languages, harnesses, repeated trials, or conflicting metrics into a convenient scalar.
 - Writing rival candidates after observing final holdout failures.
+- Splitting the umbrella skill into multiple skills merely because modularity looks cleaner.
 
 ## Next Best Action
 
-Obtain a **fresh isolated-agent harness** and execute `U0 no guidance → U1 force-loaded incumbent` on paired failure/opposing-control tasks.
+Build the **three-case executable U0/U1 development pack** without changing `verified-delta/SKILL.md`:
 
-If U1 earns a practically meaningful benefit, preregister R2–R8 and run primitive competition. Use Myopic Minimality and Premature Belief Collapse to discriminate controller families before sentence-level optimization.
+`fully fixed / no-op ↔ partially fixed / action required ↔ false completion / final-state check`.
 
-If no isolated harness is available, stop at the evidence boundary. This session has read the incumbent, rivals, and eval hypotheses and cannot serve as a clean control.
+Each case must have a deterministic or otherwise auditable grader, a clean trial contract, and a paired no-guidance/force-loaded-skill execution record. Run the cases in a genuinely fresh agent/model context when such a harness is available.
+
+If U1 earns a practically meaningful benefit without skill-induced functional or efficiency regressions, expand only the failure families justified by the first results. If it does not, narrow, factor, replace, or remove guidance instead of tuning its trigger.
+
+This session has read the incumbent, rivals, and eval hypotheses and cannot serve as a clean control.
 
 ## Update Rule
 
