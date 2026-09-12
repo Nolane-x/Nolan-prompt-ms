@@ -20,7 +20,7 @@ Nolane Prompt MS takes the opposite approach: compress research into a small ker
 | `EVALS.md` | Behavioral gates, pressure scenarios, and scoring contract |
 | `evals/evals.json` | Preregistered executable utility cases |
 | `evals/cases/` | Agent-visible fixtures plus out-of-trial deterministic graders |
-| `eval_harness.py` | Lists, prepares, grades, and records U0/U1 trials; Python stdlib only |
+| `eval_harness.py` | Lists, prepares, grades, records, and summarizes U0/U1 trials; Python stdlib only |
 | `CONSTITUTION.md` | Laws for editing, compressing, and validating the skill |
 | `STATE.md` | Minimal cross-session boot state and open research debt |
 | `verify.py` | Deterministic repository invariant checker; Python stdlib only |
@@ -33,7 +33,7 @@ No source document is copied into runtime context. Research is distilled only wh
 
 **Alpha. Behavioral verification is still open.**
 
-The runtime kernel remains 446 words with no runtime dependencies, model profiles, or tool-specific templates. It is packaged under `verified-delta/` so the skill name and parent directory agree. A deterministic verification layer guards mechanical invariants, and the repository now contains an executable three-case U0/U1 development lab, but neither substitutes for fresh isolated-agent behavioral comparison.
+The runtime kernel remains 446 words with no runtime dependencies, model profiles, or tool-specific templates. It is packaged under `verified-delta/` so the skill name and parent directory agree. A deterministic verification layer guards mechanical invariants, and the repository contains an executable three-case U0/U1 development lab, but neither substitutes for fresh isolated-agent behavioral comparison.
 
 Do not describe this version as proven, best, converged, or behaviorally verified.
 
@@ -45,11 +45,15 @@ The first development pack intentionally stays small and opposing:
 - `username-normalization-partial`: the same report hides a remaining defect; passivity fails and a focused production change is required.
 - `false-completion-state`: a command reports success while authoritative state remains wrong; proxy success fails.
 
-Inspect the preregistered cases:
+### Orchestrator boundary
+
+Inspect the preregistered cases from the **orchestrator/researcher side**:
 
 ```bash
 python eval_harness.py list --json
 ```
+
+Do not expose the full repository, manifest, graders, or `list` output to the evaluated agent merely because the orchestrator can see them. The agent-facing handoff is the output of `prepare` plus the copied workspace.
 
 Create a clean agent-visible workspace:
 
@@ -57,13 +61,30 @@ Create a clean agent-visible workspace:
 python eval_harness.py prepare username-normalization-noop /tmp/vd-u0-r1 --json
 ```
 
-Run a **fresh isolated agent/model context** against the returned prompt and workspace. For `U0`, do not load Verified Delta. For `U1`, force-load the exact current `verified-delta/SKILL.md`. The harness in this repository does not invoke a model and does not itself prove that external skill injection occurred.
+`prepare --json` intentionally returns only `case_id`, `workspace`, and `prompt`; it does not return the research-side `expected_output` field.
+
+Run a **fresh isolated agent/model context** against that prompt and workspace. For `U0`, do not load Verified Delta. For `U1`, force-load the exact current `verified-delta/SKILL.md`. The harness in this repository does not invoke a model and does not itself prove that external skill injection occurred.
 
 Grade final workspace state outside the agent context:
 
 ```bash
 python eval_harness.py grade username-normalization-noop /tmp/vd-u0-r1 --json
 ```
+
+### Record every trial
+
+The metrics file supplied to `record` must contain these four canonical keys:
+
+```json
+{
+  "input_tokens": 100,
+  "output_tokens": 20,
+  "tool_calls": 2,
+  "wall_time_ms": 500
+}
+```
+
+Each canonical value must be either a non-negative integer or `null` when the external harness genuinely cannot observe it. Additional provider-specific metrics may be retained. Missing canonical keys, negative values, booleans, or stringified numbers are rejected rather than silently normalized.
 
 Then record an immutable trial receipt:
 
@@ -82,9 +103,26 @@ python eval_harness.py record \
   --json
 ```
 
-A receipt binds the individual result to its grader output, workspace hash, transcript hash, metrics, condition, model/harness identity, exact evaluator/fixture/grader/manifest digests, and — for `U1` — the SHA-256 of the runtime skill. Existing receipt paths are never overwritten. Keep every replicate, including failures; do not average away minority failures.
+`pair-id`, `model-id`, and `harness-id` must be non-empty, and `replicate` starts at 1. A receipt binds the individual result to its grader output, workspace hash, transcript hash, metrics, condition, model/harness identity, exact evaluator/fixture/grader/manifest digests, and — for `U1` — the SHA-256 of the runtime skill. Existing receipt paths are never overwritten. Keep every replicate, including failures.
 
-The clean U0/U1 execution itself remains an external evidence boundary until a genuinely fresh model/agent harness performs it.
+### Summarize without averaging away harm
+
+Once matched receipts exist, summarize them directly:
+
+```bash
+python eval_harness.py summarize results/*.json --json
+```
+
+The summary groups by `case_id + pair_id`, preserves each replicate, and classifies a matched replicate as exactly one of:
+
+- `u1_gain`: U0 fails and U1 passes;
+- `u1_harm`: U0 passes and U1 fails;
+- `same_pass`: both pass;
+- `same_fail`: both fail.
+
+It deliberately does **not** emit one global score. A replicate becomes `not_comparable` instead of a treatment effect when U0/U1 is missing, when model identity, harness identity, or evaluator provenance differs, or when duplicate receipts claim the same condition and replicate. This prevents input ordering or mismatched configurations from manufacturing a gain/harm result.
+
+The clean U0/U1 execution itself remains an external evidence boundary until a genuinely fresh model/agent harness performs it. The runner must still preserve the matched external tool policy, budgets, reasoning/sampling configuration where applicable, and any other causal configuration required by `EVALS.md`; a receipt does not excuse an invalid experimental setup.
 
 ## Development Rule
 
