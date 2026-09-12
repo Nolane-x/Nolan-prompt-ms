@@ -2,17 +2,134 @@ name: behavioral-u0-u1
 
 on:
   workflow_dispatch:
+    inputs:
+      case_id:
+        description: Development case to run
+        required: true
+        type: choice
+        options:
+          - username-normalization-noop
+          - username-normalization-partial
+          - false-completion-state
+      model:
+        description: Copilot model identifier
+        required: true
+        default: gpt-5.4
+        type: string
+      reasoning_effort:
+        description: Reasoning effort
+        required: true
+        default: high
+        type: choice
+        options:
+          - low
+          - medium
+          - high
+          - xhigh
+      replicate:
+        description: Positive replicate number
+        required: true
+        default: "1"
+        type: string
 
 permissions:
   contents: read
   copilot-requests: write
 
 jobs:
-  contract:
+  trial:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        condition: [U0, U1]
+    env:
+      CASE_ID: ${{ inputs.case_id }}
+      CONDITION: ${{ matrix.condition }}
+      MODEL_ID: ${{ inputs.model }}
+      REASONING_EFFORT: ${{ inputs.reasoning_effort }}
+      REPLICATE: ${{ inputs.replicate }}
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
-      - name: Confirm manual behavioral runner contract
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare isolated agent-visible workspace
+        shell: bash
         run: |
-          echo "Manual behavioral runner skeleton only."
-          echo "No model invocation occurs in this workflow version."
+          set -euo pipefail
+          TRIAL_ROOT="$RUNNER_TEMP/vd-trial"
+          WORKSPACE="$TRIAL_ROOT/workspace"
+          mkdir -p "$TRIAL_ROOT"
+          python eval_harness.py prepare "$CASE_ID" "$WORKSPACE" --json > "$TRIAL_ROOT/prepare.json"
+          python - "$TRIAL_ROOT/prepare.json" "$TRIAL_ROOT/prompt.txt" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          source = pathlib.Path(sys.argv[1])
+          target = pathlib.Path(sys.argv[2])
+          payload = json.loads(source.read_text(encoding="utf-8"))
+          target.write_text(payload["prompt"] + "\n", encoding="utf-8")
+          PY
+
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot
+
+      - name: Run isolated Copilot trial
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRIAL_ROOT="$RUNNER_TEMP/vd-trial"
+          WORKSPACE="$TRIAL_ROOT/workspace"
+          export COPILOT_HOME="$RUNNER_TEMP/copilot-home-$CONDITION"
+          mkdir -p "$COPILOT_HOME"
+
+          start_ms=$(date +%s%3N)
+          set +e
+          copilot \
+            -C "$WORKSPACE" \
+            --prompt="$(cat "$TRIAL_ROOT/prompt.txt")" \
+            --model="$MODEL_ID" \
+            --reasoning-effort="$REASONING_EFFORT" \
+            --available-tools='bash,apply_patch,create,edit,view,glob,grep' \
+            --allow-tool='write,shell(python:*)' \
+            --disable-builtin-mcps \
+            --no-ask-user \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            --share="$TRIAL_ROOT/transcript.md" \
+            >"$TRIAL_ROOT/copilot.stdout.txt" \
+            2>"$TRIAL_ROOT/copilot.stderr.txt"
+          status=$?
+          set -e
+          end_ms=$(date +%s%3N)
+          printf '%s\n' "$status" > "$TRIAL_ROOT/copilot.exit-code.txt"
+          printf '%s\n' "$((end_ms - start_ms))" > "$TRIAL_ROOT/wall-time-ms.txt"
+
+          if [ ! -f "$TRIAL_ROOT/transcript.md" ]; then
+            {
+              echo "# Copilot stdout"
+              cat "$TRIAL_ROOT/copilot.stdout.txt"
+              echo
+              echo "# Copilot stderr"
+              cat "$TRIAL_ROOT/copilot.stderr.txt"
+            } > "$TRIAL_ROOT/transcript.md"
+          fi
+
+      - name: Preserve raw trial evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-${{ inputs.case_id }}-${{ matrix.condition }}-r${{ inputs.replicate }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/vd-trial
+          if-no-files-found: error
