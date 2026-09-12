@@ -232,24 +232,25 @@ def load_receipt(path: pathlib.Path) -> dict:
     if not isinstance(provenance, dict):
         raise ValueError(f"invalid receipt eval_provenance in {path}")
 
-    run_config = payload.get("run_config")
-    if run_config is not None:
-        if not isinstance(run_config, dict):
-            raise ValueError(f"invalid receipt run config in {path}")
-        value = validate_run_config(run_config.get("value"))
-        expected_sha256 = canonical_sha256(value)
-        expected_matched_sha256 = canonical_sha256(value["matched"])
-        if run_config.get("sha256") != expected_sha256:
-            raise ValueError(f"run config SHA-256 mismatch in receipt: {path}")
-        if run_config.get("matched_sha256") != expected_matched_sha256:
-            raise ValueError(f"run config matched SHA-256 mismatch in receipt: {path}")
-        validated_run_config = {
-            "value": value,
-            "sha256": expected_sha256,
-            "matched_sha256": expected_matched_sha256,
-        }
-        validate_run_config_binding(validated_run_config, condition, model_id, harness_id)
-        payload["run_config"] = validated_run_config
+    if "run_config" not in payload:
+        raise ValueError(f"receipt missing run config: {path}")
+    run_config = payload["run_config"]
+    if not isinstance(run_config, dict):
+        raise ValueError(f"invalid receipt run config in {path}")
+    value = validate_run_config(run_config.get("value"))
+    expected_sha256 = canonical_sha256(value)
+    expected_matched_sha256 = canonical_sha256(value["matched"])
+    if run_config.get("sha256") != expected_sha256:
+        raise ValueError(f"run config SHA-256 mismatch in receipt: {path}")
+    if run_config.get("matched_sha256") != expected_matched_sha256:
+        raise ValueError(f"run config matched SHA-256 mismatch in receipt: {path}")
+    validated_run_config = {
+        "value": value,
+        "sha256": expected_sha256,
+        "matched_sha256": expected_matched_sha256,
+    }
+    validate_run_config_binding(validated_run_config, condition, model_id, harness_id)
+    payload["run_config"] = validated_run_config
     return payload
 
 
