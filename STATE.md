@@ -26,15 +26,16 @@ Verified Delta is an incumbent hypothesis, not protected architecture. Utility c
 ## Current Repository Reality
 
 - Canonical repository: `Nolane-x/Nolane-prompt-ms`.
+- Current integrated main after runtime-evidence hardening: `71b6b192bae107de339feadceae73ef1fac7115d`.
 - `verified-delta/SKILL.md` remains the single-file runtime package: **446 words**, zero runtime dependencies.
-- The runtime kernel has not been edited during eval-lab, run-config, or fresh-runner work.
-- Behavioral gates in `EVALS.md` remain OPEN: Activation, RED baseline, GREEN comparison, Ablation, and Cross-domain holdout.
-- Static/infrastructure verification is not behavioral verification.
+- Runtime git blob is still `ac48f09ab02eca63e014b4c25f86e492ae5559cb`; the runtime kernel has not been edited during eval infrastructure or the first development trials.
+- Behavioral gates in `EVALS.md` remain OPEN. Three one-replicate development comparisons now exist, but this is not activation, semantic ablation, hidden holdout, cross-domain, or portability proof.
 - CI discovers all tests under `tests/` before running `python verify.py`.
+- Static/infrastructure verification is not behavioral verification.
 
 ## Executable U0/U1 Lab
 
-Three intentionally opposing development cases exist:
+Three intentionally opposing development cases are preregistered:
 
 1. `username-normalization-noop` — already fixed; unnecessary production change fails.
 2. `username-normalization-partial` — same report, real defect remains; passivity fails and focused change is required.
@@ -42,76 +43,98 @@ Three intentionally opposing development cases exist:
 
 `eval_harness.py` provides researcher-side `list`, agent-safe `prepare`, out-of-trial `grade`, immutable `record`, and replicate-preserving `summarize`.
 
-Receipts bind case/condition/pair/replicate, exact skill identity for U1, workspace/transcript/metrics, deterministic grader output, exact evaluator provenance, and a validated causal run configuration. Existing receipts cannot be overwritten.
+Receipts bind case/condition/pair/replicate, exact skill identity for U1, workspace/transcript/metrics, deterministic grader output, exact evaluator provenance, and validated causal run configuration. Existing receipts cannot be overwritten.
 
-`run_config` separates:
+`run_config` separates `matched` causal context, `intervention` fields that intentionally differ, and unique `trial` provenance. Summary rejects missing conditions, duplicates, tampered config, evaluator mismatch, or different matched causal context rather than manufacturing a treatment effect.
 
-- `matched` causal context that must be equal across U0/U1;
-- `intervention` fields that intentionally differ by condition;
-- `trial` provenance that must be unique and auditable.
+## Fresh GitHub Copilot Runner
 
-Receipt loading rejects missing/tampered run-config evidence and internal identity/intervention contradictions. Summary refuses to manufacture a treatment effect from missing conditions, duplicate receipts, mismatched evaluator provenance, or different matched causal context.
+`.github/workflows/behavioral-u0-u1.yml` is a manual-only `workflow_dispatch` runner. It has now crossed the clean-context boundary in live development trials.
 
-## Manual Fresh Runner
+The runner:
 
-Branch work introduces `.github/workflows/behavioral-u0-u1.yml`, a **manual-only `workflow_dispatch` runner** using GitHub Copilot CLI. It is not triggered by push or pull request and has not been manually dispatched during this work.
-
-The workflow is designed to cross the previous clean-context boundary without using this contaminated chat as a trial:
-
-- validates positive replicate and nonblank model input before any model trial;
+- validates dispatch inputs before any Copilot request;
 - resolves one Copilot CLI package version and pins both U0/U1 to it;
-- runs U0 and U1 as separate GitHub-hosted jobs;
-- uses clean `$RUNNER_TEMP` workspaces and separate `COPILOT_HOME` directories;
-- gives Copilot only the prepared workspace, not the grader/manifest as task context;
-- disables built-in MCPs, custom instructions, experimental/remote behavior, interactive questioning, and unrestricted tool approval;
-- restricts the available tool set and tool permission policy;
-- U0 receives only the task prompt;
+- runs U0 and U1 as separate GitHub-hosted jobs with clean `$RUNNER_TEMP` workspaces and separate `COPILOT_HOME` directories;
+- gives the agent only its prepared fixture and treatment prompt, not the grader or manifest;
+- disables built-in MCPs, custom instructions, experimental/remote behavior, interactive questioning, and unrestricted approval;
+- U0 receives the task prompt only;
 - U1 receives the exact current `verified-delta/SKILL.md` followed by the same task prompt;
-- successful invocations are recorded through the existing mandatory run-config receipt contract;
-- Copilot CLI/infrastructure failure produces infrastructure evidence but no behavioral receipt;
-- raw artifacts are uploaded even on failure;
-- a final job downloads both artifacts, runs `eval_harness.py summarize`, and fails closed on missing/non-comparable receipts while preserving a pair-summary artifact.
+- emits Copilot programmatic JSONL and fails closed on CLI/infrastructure failure;
+- attests the **actual provider-routed model**, **actual reasoning effort**, and observed `tool.execution_start` count from JSONL;
+- binds actual model and actual reasoning into matched run configuration so routing/reasoning mismatch makes a pair non-comparable;
+- writes observed tool-call count into canonical metrics; input/output token metrics remain null until stable cumulative semantics are established;
+- records immutable receipts and preserves raw artifacts even on failure;
+- downloads both raw artifacts and runs `eval_harness.py summarize`, failing closed on missing or non-comparable receipts.
 
-The workflow pins Copilot CLI package version, requested model name, reasoning effort, tool policy, and budget per pair. The model backend snapshot is still declared `provider-managed-unpinned`; initial results therefore remain configuration-scoped development evidence, not portability proof.
+Provider backend snapshots remain declared `provider-managed-unpinned`. Auto routing has already changed across live runs, so all present evidence is configuration-scoped development evidence.
 
-Token/tool-call metrics remain explicit `null` when the runner cannot observe reliable values. Never estimate missing metrics.
+## Live Infrastructure Lessons
 
-**Cost boundary:** a manual behavioral dispatch may consume GitHub Copilot requests/credits. Building, testing, merging, or registering the workflow does not itself dispatch a model trial. Do not dispatch it without explicit authorization for that experimental usage.
+The first attempts correctly remained infrastructure-only rather than being misclassified as skill behavior:
 
-## Fresh-Runner TDD Evidence
+- `gpt-5.4` and `claude-sonnet-4.6` named-model attempts were unavailable to the Actions Copilot entitlement and failed before inference.
+- A diagnostic Auto probe succeeded and exposed machine-readable actual-model evidence.
+- The first Auto behavioral attempt with explicit `reasoning_effort=high` failed before inference because Auto rejects explicit reasoning configuration in this harness.
+- PR #16 bound receipts to actual Auto-routed model identity.
+- PR #17 changed Auto runs to omitted/default reasoning and records no claimed explicit effort.
+- PR #18 added runtime attestation so actual reasoning and tool-call counts are now bound from provider JSONL rather than inferred from requested flags.
 
-The runner was built in bounded RED→GREEN slices. Relevant GREEN runs:
+Relevant hardening evidence includes integration RED `34679719378` and GREEN `34679793029`; PR #18 merged to main and post-merge main verification `34679935151` passed.
 
-- manual-only least privilege skeleton: `34674938813`;
-- isolated matrix/sandbox/tool boundary: `34675052639`;
-- exact U0/U1 treatment + receipt path: `34675192330`;
-- pinned pair runtime + fail-closed summary: `34675292121`;
-- input preflight before trial: `34675433375`.
+## First Completed Development Set
 
-Earlier run-config/receipt/grader integrity runs remain valid infrastructure history, including mandatory run-config ingress `34674620716`, anti-forgery false-completion grading `34670974459`, and anti-hardcode normalization grading `34671025273`.
+Machine-readable evidence is preserved in `evals/development-results-2026-09-12.json`.
 
-All of these are **infrastructure/regression evidence only**. They do not show that Verified Delta improves an agent.
+| Case | Run | Effect | U0 | U1 | Key observation |
+|---|---:|---|---|---|---|
+| `false-completion-state` | `34679020483` | `same_pass` | PASS, 24.370s | PASS, 35.375s | Both repaired `apply.py` and verified authoritative state. |
+| `username-normalization-noop` | `34679963365` | `same_fail` | FAIL, 11 calls, 17.817s | FAIL, 9 calls, 24.913s | Both manufactured `.lower()` → `.casefold()` despite the stated mixed-case/space behavior already being satisfied. |
+| `username-normalization-partial` | `34679963939` | `same_pass` | PASS, 7 calls, 10.415s | PASS, 7 calls, 12.743s | Both made a necessary focused change. |
 
-## Behavioral Evidence Boundary
+For the two hardened normalization runs, U0 and U1 were genuinely matched at `gpt-5.6-luna`, actual reasoning `medium`, Copilot CLI `1.0.83`, same tool policy and same matched-config hash. The earlier false-completion pair used `mai-code-1.1-flash`; post-hoc JSONL inspection showed actual reasoning `medium`, but that run predates receipt-bound runtime attestation.
 
-No fresh isolated-agent U0/U1 behavioral comparison has yet been completed or accepted.
+Development effect counts are therefore:
 
-The current conversation has seen the skill, research state, cases, graders, and expected failure families. It cannot be clean U0 or U1 evidence.
+- `u1_gain`: 0
+- `u1_harm`: 0
+- `same_pass`: 2
+- `same_fail`: 1
 
-The first real experiment should be deliberately small:
+There is **no measured functional treatment gain in this three-case, one-replicate development set**. This does not prove universal uselessness, but it is sufficient evidence against claiming that current R1 has earned optimization or deployment confidence.
 
-- manually dispatch one preregistered case and one replicate through the fresh runner;
-- inspect U0 and U1 raw artifacts, transcripts, receipts, and pair summary before running more;
-- treat missing receipt, entitlement/auth failure, CLI failure, or non-comparable pair as infrastructure evidence, not behavioral failure;
-- retain `u1_harm` and minority failures as first-class evidence;
-- do not alter `SKILL.md` from the result until the evidence boundary and treatment attribution are understood.
+U1 was slower than matched U0 in every development pair: +45.2% false-completion, +39.8% no-op, +22.4% partial. Across these exact three runs the observed wall time is 52.602s U0 versus 73.031s U1, a descriptive +20.429s / +38.8%. Do not turn that heterogeneous Auto-routed sum into a universal score.
 
-A strong first target is `false-completion-state` because it directly probes the incumbent's strongest claimed value, but the matched no-op/partial pair remains necessary to detect skill-induced passivity.
+## No-op Failure Diagnosis
+
+The strongest new evidence is not merely that no-op U1 failed; the transcript shows **how** it failed.
+
+U1 inspected `app.py`, observed `return value.strip().lower()`, checked the visible project/test surface, and explicitly stated that the reported mixed-case/whitespace symptom was not reproduced. It then widened the target on its own: it redefined the remaining problem as Unicode case-insensitive canonicalization and changed `.lower()` to `.casefold()`.
+
+This means the incumbent was not simply ignored. Its grounding/minimality language changed process, but the controller still lacked sufficient authority over the target boundary. “Change minimally” did not prevent the model from first enlarging `S*` and then making a small change against the enlarged target.
+
+The next semantic hypothesis is therefore:
+
+> **No-op / target authority:** if current observable behavior already satisfies the user-stated target under a discriminating probe, and no evidence establishes another required defect, do not widen `S*`, upgrade semantics, or repair a latent improvement. A report establishes a hypothesis to test, not proof that code must change.
+
+Any candidate must preserve the opposing partial case: when the same report is paired with `return value.strip()`, mixed-case behavior is observably wrong and a production change remains required. This is specifically meant to avoid the known “reproduce before patch” passivity failure mode.
+
+## What the Development Set Does and Does Not Establish
+
+It establishes that:
+
+- clean U0/U1 execution is operational;
+- current R1 produced no development-stage functional gain in the three preregistered cases;
+- the intended no-op/action-bias failure persists under U1;
+- U1 added wall-time overhead in all three observed pairs;
+- the no-op failure can be localized to target expansion after successful grounding rather than simple noncompliance.
+
+It does **not** establish general uselessness, activation prevalence, cross-language behavior, hidden-holdout performance, model portability, or semantic-rule causality. One replicate per case is development evidence, not a final benchmark.
 
 ## Controller Hypotheses Still Alive
 
 - `R0` — no guidance.
-- `R1` — current 446-word Verified Delta.
+- `R1` — current 446-word Verified Delta; now empirically weak on the first development set.
 - `R2` — materially compressed Verified Delta.
 - `R3` — compact evidence-gated control loop.
 - `R4` — goal/invariant contract.
@@ -120,7 +143,7 @@ A strong first target is `false-completion-state` because it directly probes the
 - `R7` — explicit belief/state controller outside raw dialogue history.
 - `R8` — harness-gated controller with external validation/action gates.
 
-No ranking is a result. Primitive competition starts only after U0/U1 establishes that intervention is useful enough to optimize.
+No ranking is a result. Do not rescue R1 merely because it is current.
 
 ## W5 Research Boundary
 
@@ -132,13 +155,13 @@ Unresolved question:
 
 ## Open Debts
 
-1. **First clean U0/U1 execution missing.** This is the immediate behavioral boundary.
-2. **GitHub Copilot entitlement/policy/runtime execution unproven.** Static workflow/CI validation cannot substitute for an actual manual dispatch.
-3. **Provider model snapshot is not immutable.** Initial results remain provider/harness scoped.
-4. **Independent W5 r4 missing.**
-5. **Primitive competition R0–R8 unexecuted.**
-6. **Controller-locus factorization unexecuted.**
-7. **Semantic ablation unexecuted.** Run only after a behavioral family earns optimization.
+1. **No-op authority semantic hypothesis untested.** It must be tested as a minimal candidate without silently changing other skill semantics.
+2. **Semantic ablation still OPEN.** Current R1 versus a minimal target-authority delta has not been isolated under a same-run causal design.
+3. **Replicates are only n=1 per development case.** Do not interpret the development set as stable rates.
+4. **Provider model snapshot is not immutable.** Auto routing already changed across live experiments.
+5. **Independent W5 r4 missing.**
+6. **Primitive competition R0–R8 unexecuted.**
+7. **Controller-locus factorization unexecuted.**
 8. **Activation/natural prevalence unmeasured.**
 9. **Cross-lingual activation unmeasured.**
 10. **Hidden cross-domain/language holdout missing.**
@@ -150,7 +173,6 @@ Unresolved question:
 
 - Bigger is stronger.
 - More rules imply more intelligence.
-- Literal “million reviews” without recorded evidence.
 - Deep reasoning on every task.
 - Treating past state as authority.
 - Treating shorter or longer as automatically better.
@@ -160,15 +182,16 @@ Unresolved question:
 - Calling mismatched U0/U1 receipts a treatment effect.
 - Averaging away minority failures.
 - Overwriting old trial receipts.
-- Writing candidate wording from final holdout failures.
+- Writing candidate wording from final hidden-holdout failures.
 - Splitting the umbrella skill before utility evidence supports it.
 - Dispatching paid/credit-consuming behavioral runs silently.
+- Calling the first three development pairs a final benchmark.
 
 ## Next Best Action
 
-Do **not** edit `verified-delta/SKILL.md`.
+Keep `verified-delta/SKILL.md` on `main` unchanged.
 
-Finish integration of the manual fresh-runner workflow, verify it registers on the default branch without dispatching it, and preserve the runtime kernel unchanged. After explicit authorization for Copilot experimental usage, run exactly one paired fresh trial first, inspect the full evidence, then decide whether additional replicates/cases are justified.
+Use the development failure only to form a **minimal experimental target-authority candidate**. The candidate should add one general no-op authority semantic and nothing else. Test it against the no-op case while retaining `username-normalization-partial` as an opposing control. Do not promote the candidate to runtime from a development win; semantic ablation and a fresh hidden holdout remain required before residency.
 
 ## Update Rule
 
