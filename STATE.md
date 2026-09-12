@@ -91,9 +91,9 @@ Trial jobs therefore failed at the receipt boundary with nonzero Copilot exits. 
 
 The failed run also exposed a stronger experiment-integrity issue in the original workflow: the externally supplied seed was present in the trial environment while the repository generator remained checked out during inference. Because the evaluated agent had bounded Python shell access, that surface was unnecessarily reconstructible even though the hidden bundle itself had been deleted.
 
-## Hardened Selection Execution Boundary
+## Hardened Selection Execution Boundary — Integrated
 
-Branch `fix/selection-runner-preflight-boundary` fixes the infrastructure root cause and leakage boundary without changing R1, R1A, the frozen plan, generator semantics, graders, or decision rule.
+PR #26 integrated the infrastructure fix into `main` as merge commit `7f57d587c8490ad966e487134c7052a3ad9f9532` without changing R1, R1A, the frozen plan, generator semantics, graders, or decision rule.
 
 The hardened workflow now:
 
@@ -109,10 +109,13 @@ The hardened workflow now:
 - restores a trusted checkout and re-downloads the exact hidden bundle only after inference for attestation, process-evidence extraction, grading, and immutable receipt creation;
 - still requires exactly 24 valid receipts before the frozen summary can produce a decision.
 
-TDD evidence for this hardening:
+TDD and integration evidence:
 
 - test-only commit `2e077cdca04cf8b67270ec5fcea93fa24409d669` → run `34700203085` RED with exactly four new workflow-boundary failures while prior tests remained green;
-- implementation commit `76fa7741ce6c525b321b72bbbd6c60a822392298` → run `34700371261` GREEN, including full unit discovery and `python verify.py`.
+- implementation commit `76fa7741ce6c525b321b72bbbd6c60a822392298` → run `34700371261` GREEN;
+- final PR head `ad2b33527368d6b56cb4015dc38e161959d62a81` → push run `34700509229` GREEN with **88/88 tests** plus `python verify.py`;
+- exact PR-triggered run `34700561438` GREEN on the same head;
+- post-merge `main@7f57d587c8490ad966e487134c7052a3ad9f9532` run `34700580459` GREEN, including the full unit suite and `python verify.py`.
 
 These runs are infrastructure evidence only, not selection behavioral evidence.
 
@@ -124,7 +127,7 @@ Earlier RED→GREEN infrastructure evidence includes `34694922809` → `34694999
 
 ## Open Debts
 
-1. **The frozen 24-trial selection-validation experiment still has no valid behavioral run.** Merge and verify the hardened runner, then dispatch it once with a preflight-supported named model/reasoning configuration.
+1. **The frozen 24-trial selection-validation experiment still has no valid behavioral run.** Infrastructure is integrated and green; the next evidence-producing action is one manual dispatch using `gpt-5.4` / `medium`, gated by the new preflight.
 2. Final hidden instances for the valid run must remain fresh and unseen by the evaluated agent. Do not publish or tune against them before execution.
 3. Final cross-domain hidden holdout remains open even if selection validation passes.
 4. Provider snapshot immutability remains unavailable.
@@ -164,7 +167,7 @@ Unresolved research question:
 
 Keep `verified-delta/SKILL.md`, R1A wording, `selection_validation.py` case-generation semantics, and the frozen decision rule unchanged.
 
-First merge the hardened selection-runner boundary only after exact-head tests plus `python verify.py` are green, then confirm post-merge `main` CI. After that, manually dispatch `.github/workflows/target-authority-selection.yml` once with `model=gpt-5.4` and `reasoning_effort=medium`. The preflight must pass before the workflow is allowed to create the final hidden bundle.
+Manually dispatch `.github/workflows/target-authority-selection.yml` exactly once from current `main` with `model=gpt-5.4` and `reasoning_effort=medium`. Do **not** supply an execution seed; the workflow now generates it privately only after model/runtime preflight succeeds. If preflight fails, no final hidden bundle exists and the failure is infrastructure-only.
 
 Preserve the resulting preflight, generation/admission artifacts, all immutable arm receipts, and summary exactly as observed. Retry only infrastructure failures. A behavioral failure is a valid result; a non-comparable or infrastructure-incomplete run is not a treatment result. Do not tune R1A on generated selection instances.
 
