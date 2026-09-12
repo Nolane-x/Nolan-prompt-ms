@@ -1,0 +1,30 @@
+name: dispatch-remaining-u0-u1
+
+on:
+  push:
+    branches:
+      - eval/remaining-u0-u1-dispatch
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch remaining preregistered behavioral pairs on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for case_id in username-normalization-noop username-normalization-partial; do
+            gh workflow run behavioral-u0-u1.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f case_id="$case_id" \
+              -f model=auto \
+              -f reasoning_effort=default \
+              -f replicate=1
+          done
