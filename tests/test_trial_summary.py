@@ -302,6 +302,23 @@ class TrialSummaryTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
             self.assertIn("run config", result.stderr.lower())
 
+    def test_summarize_rejects_receipt_without_run_config(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            u0_receipt, u1_receipt = self.make_paired_receipts(root)
+            changed = json.loads(u1_receipt.read_text(encoding="utf-8"))
+            changed.pop("run_config")
+            u1_receipt.write_text(json.dumps(changed), encoding="utf-8")
+
+            result = self.run_harness(
+                "summarize",
+                str(u0_receipt),
+                str(u1_receipt),
+                "--json",
+            )
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("run config", result.stderr.lower())
+
     def test_summarize_rejects_duplicate_condition_replicate_without_last_file_wins(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
