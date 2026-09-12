@@ -1,0 +1,28 @@
+name: dispatch-false-completion-r1
+
+on:
+  push:
+    branches:
+      - eval/copilot-fresh-runner-v4
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch exactly one paired behavioral trial on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run behavioral-u0-u1.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f case_id=false-completion-state \
+            -f model=gpt-5.4 \
+            -f reasoning_effort=high \
+            -f replicate=1
