@@ -32,6 +32,21 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
         self.assertIn("actions/upload-artifact@v4", text)
         self.assertIn("if: always()", text)
 
+    def test_u1_binds_exact_skill_and_every_trial_records_a_receipt(self):
+        text = self.workflow_text()
+
+        self.assertIn('if [ "$CONDITION" = "U1" ]; then', text)
+        self.assertIn("verified-delta/SKILL.md", text)
+        self.assertIn("force-loaded-skill", text)
+        self.assertIn("run-config.json", text)
+        self.assertIn("metrics.json", text)
+        self.assertIn("python eval_harness.py record", text)
+        self.assertIn("--run-config", text)
+        self.assertIn("receipt.json", text)
+        self.assertIn('"input_tokens": null', text)
+        self.assertIn('"output_tokens": null', text)
+        self.assertIn('"tool_calls": null', text)
+
 
 if __name__ == "__main__":
     unittest.main()
