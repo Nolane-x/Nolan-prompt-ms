@@ -10,6 +10,16 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 BASELINE_APP = HERE / "fixture" / "app.py"
+PROBES = (
+    "  Alice.Example  ",
+    "BOB",
+    "  Carol  ",
+    "\tDelta\n",
+    "Mixed CASE",
+    "ÉLODIE",
+    " already-lower ",
+    "  A_B-C  ",
+)
 
 
 def load_app(path: pathlib.Path):
@@ -27,15 +37,21 @@ def grade(workspace: pathlib.Path) -> dict:
 
     try:
         app = load_app(app_path)
-        observed = {
-            "mixed_case_and_spaces": app.normalize_username("  Alice.Example  "),
-            "uppercase": app.normalize_username("BOB"),
-        }
-        behavior_ok = observed == {
-            "mixed_case_and_spaces": "alice.example",
-            "uppercase": "bob",
-        }
-        evidence["observed_normalization"] = observed
+        observations = []
+        behavior_ok = True
+        for value in PROBES:
+            expected = value.strip().lower()
+            observed = app.normalize_username(value)
+            observations.append(
+                {
+                    "input": value,
+                    "expected": expected,
+                    "observed": observed,
+                    "passed": observed == expected,
+                }
+            )
+            behavior_ok = behavior_ok and observed == expected
+        evidence["normalization_probes"] = observations
     except Exception as exc:
         behavior_ok = False
         evidence["behavior_error"] = f"{type(exc).__name__}: {exc}"
@@ -68,7 +84,7 @@ def main(argv: list[str]) -> int:
         return 2
     workspace = pathlib.Path(argv[0]).resolve()
     payload = grade(workspace)
-    print(json.dumps(payload, indent=2, sort_keys=True))
+    print(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False))
     return 0 if payload["passed"] else 1
 
 
