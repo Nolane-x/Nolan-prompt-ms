@@ -75,18 +75,19 @@ The formal summary therefore has `infrastructure_valid=false`, because the plan 
 
 **Result:** R1A does **not** pass the frozen selection-validation boundary and receives **no runtime residency**. Do not retune R1A on these instances. Full machine-readable evidence is in `evals/target-authority-selection-results-2026-09-12.json`.
 
-## Excluded Attempt 2
+## Excluded Attempt 2 and Rerun Hardening
 
-After attempt-1 outcomes were already observed, a GitHub “rerun one matrix job” request unexpectedly restarted the workflow dependency graph, including `generate`, and created a new hidden bundle under run attempt 2. That is not a same-identity infrastructure retry.
+After attempt-1 outcomes were already observed, a GitHub “rerun one matrix job” request unexpectedly restarted the workflow dependency graph, including `generate`, and created a new hidden bundle under run attempt 2. That is not a same-identity infrastructure retry, so attempt 2 remains excluded in full from behavioral evidence.
 
-Attempt 2 is therefore **excluded in full** from behavioral evidence, regardless of its outputs. Never combine attempt-2 artifacts with attempt-1 receipts. The workflow must be hardened before another hidden experiment so a rerun cannot silently regenerate the selection bundle.
+PR #28 fixed the root cause at the workflow boundary. Merge commit `fc8cdd32c93cba02525409e0f5472640d8a61933` binds `github.run_attempt` in the generation job and rejects any attempt other than `1` before `secrets.token_hex(32)` can create a new selection seed. TDD evidence: run `34702994641` RED on the missing guard, run `34703090924` GREEN after the fix, exact PR run `34703125673` GREEN, and post-merge run `34703148057` GREEN.
 
-## Earlier Infrastructure-Only Dispatches
+A future same-identity infrastructure repair therefore requires a purpose-built exact-bundle repair path; GitHub workflow/job rerun semantics must not be used for hidden selection evidence.
 
-- Run `34699852491`: explicit `gpt-5.6-luna` was rejected by Copilot CLI before valid inference; no behavioral sample.
-- Run `34701533638`: explicit `gpt-5.4` failed the new preflight before hidden generation; no behavioral sample.
+## Supported Dispatch Default
 
-These failures established that this Copilot environment can auto-route to Luna while rejecting Luna and GPT-5.4 as explicit CLI model identifiers.
+Two infrastructure-only dispatches established that Copilot CLI `1.0.83` rejected explicit `gpt-5.6-luna` and explicit `gpt-5.4`, while `auto/default` successfully routed and attested actual `gpt-5.6-luna / medium` in the valid selection attempt.
+
+PR #29 therefore changed only the manual selection defaults to `model=auto`, `reasoning_effort=default`. Merge commit `2e87aafdb2c7904e674c700e321fc3939c8ece02`; TDD RED run `34703191937`, GREEN run `34703260382`, exact PR run `34703295763`, and post-merge run `34703320581` are all infrastructure evidence. Actual model/reasoning/tool-set comparability remains fail-closed per arm; `auto` routing is not treated as a promise of identical runtime identity.
 
 ## Research Consequence
 
@@ -94,16 +95,24 @@ R1A solved a narrow development target-widening failure but did not generalize i
 
 Current evidence does **not** justify editing R1 from these hidden outcomes. Runtime R1 remains the incumbent only because no replacement has earned residency, not because R1 is proven.
 
+The next useful work is mechanism localization, not more selection reruns. The preserved comparable R1A failures are:
+
+- `act_defect_remains-r2`;
+- `act_explicit_broader_requirement-r2`;
+- `probe_resolvable_ambiguity-r2`;
+- `verify_authoritative_state-r1`.
+
+These failures can inform fresh development probes, but they cannot become a retuned hidden test set.
+
 ## Open Debts
 
-1. Harden selection rerun orchestration so any rerun reuses an exact admitted bundle or fails before regeneration.
-2. Default future Copilot selection dispatches to an actually supported routing contract; avoid assuming a documented model identifier is explicitly selectable.
-3. Localize the comparable act/probe/verify failures without rewriting R1A on the consumed selection instances.
-4. Formulate any next candidate using fresh development probes, then preregister a new selection boundary before generating new hidden cases.
-5. Final cross-domain hidden holdout remains open for any future candidate that first passes selection.
-6. Provider snapshot immutability remains unavailable.
-7. Independent W5 r4 verification remains missing.
-8. Primitive competition R0–R8, controller-locus comparison, natural activation, cross-language activation, portability, umbrella-versus-micro-skill granularity, myopic-minimality, and belief-collapse probes remain open.
+1. Localize the four comparable act/probe/verify failures without rewriting R1A on the consumed selection instances.
+2. Formulate any next candidate using fresh development probes, then preregister a new selection boundary before generating new hidden cases.
+3. Design a purpose-built exact-bundle repair workflow before any future experiment needs same-identity infrastructure retries.
+4. Final cross-domain hidden holdout remains open for any future candidate that first passes selection.
+5. Provider snapshot immutability remains unavailable.
+6. Independent W5 r4 verification remains missing.
+7. Primitive competition R0–R8, controller-locus comparison, natural activation, cross-language activation, portability, umbrella-versus-micro-skill granularity, myopic-minimality, and belief-collapse probes remain open.
 
 ## Rejected Directions Worth Preserving
 
@@ -116,6 +125,7 @@ Current evidence does **not** justify editing R1 from these hidden outcomes. Run
 - Reusing consumed selection cases as hidden evidence.
 - Rewriting R1A after seeing this selection result and rerunning the same cases as if unseen.
 - Treating a GitHub matrix-job rerun as same-identity evidence when its dependency graph regenerated the hidden bundle.
+- Treating `auto` model routing as a matched-model guarantee.
 - Promoting development-stable or selection-stable evidence directly to runtime residency.
 
 ## W5 Boundary
@@ -128,9 +138,9 @@ Unresolved research question:
 
 ## Next Best Action
 
-Keep runtime R1 and frozen R1A wording unchanged while closing the evidence record.
+Keep runtime R1 and frozen R1A wording unchanged.
 
-First harden the rerun boundary with a fail-closed regression test. Then analyze the preserved comparable failures as diagnostic evidence, create any new semantic candidate only through fresh development tasks, and preregister a new fresh selection experiment before hidden generation. The consumed attempt-1 cases must never serve as that new hidden set.
+Inspect the raw attempt-1 artifacts for the four comparable behavioral failures and localize their mechanisms. Convert those mechanisms into **fresh development cases**, not edits tuned against the consumed selection cases. Only after a new semantic candidate survives opposing fresh development probes should a new selection plan be preregistered and a completely fresh hidden bundle generated.
 
 ## Update Rule
 
