@@ -39,8 +39,8 @@ Verified Delta is the incumbent, not protected architecture. Its wording, tuple,
 The first utility pack is now implemented and deterministic:
 
 1. `username-normalization-noop` — the reported defect is already absent; unnecessary production change fails.
-2. `username-normalization-partial` — matched report, but a real defect remains; pristine/no-op behavior fails and a focused production change passes.
-3. `false-completion-state` — `apply.py` reports success and exits 0 while authoritative state stays wrong; proxy success fails, direct state editing without the required command fails, and command invocation plus correct final state passes.
+2. `username-normalization-partial` — matched report, but a real defect remains; pristine/no-op behavior fails and a focused production change passes. The grader uses a diverse deterministic normalization probe set rather than two memorized public examples.
+3. `false-completion-state` — baseline `apply.py` reports success and exits 0 while authoritative state stays wrong. The grader functionally re-executes the candidate command in a clean sandbox and separately checks final workspace state, so direct state edits or forgeable invocation receipts cannot substitute for a working command.
 
 `eval_harness.py` provides:
 
@@ -70,11 +70,13 @@ The pack was built in small RED→GREEN slices rather than as one unverified fra
 - isolated prepare: `34669285258`;
 - no-op grader: `34669357015`;
 - partially-fixed opposing grader: `34669456024`;
-- false-completion grader: `34670365054`;
+- false-completion initial grader: `34670365054`;
 - U0 receipt: `34670459243`;
 - U1 exact skill identity: `34670551790`;
 - immutable receipts: `34670654058`;
-- exact evaluator provenance: `34670722881`.
+- exact evaluator provenance: `34670722881`;
+- false-completion anti-forgery grader: `34670974459`;
+- partial-grader anti-hardcode probes: `34671025273`.
 
 These are **infrastructure/regression results**, not evidence that Verified Delta improves an agent.
 
@@ -147,6 +149,7 @@ The unresolved question remains:
 - Treating `Use when...` or ≤500 words as universal Agent Skills syntax.
 - Optimizing activation metadata before content utility.
 - Crediting prompt text for behavior actually enforced by a harness.
+- Trusting an agent-writable marker as proof that a command ran correctly.
 - Pooling languages, harnesses, tasks, repeated trials, or conflicting metrics into a convenient scalar.
 - Averaging away minority failures.
 - Overwriting old trial receipts.
