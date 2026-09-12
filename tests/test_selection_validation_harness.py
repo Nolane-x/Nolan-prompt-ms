@@ -48,6 +48,25 @@ class SelectionValidationHarnessTests(unittest.TestCase):
                 {"noop", "required"},
             )
 
+    def test_redacted_agent_pack_contains_no_seed_or_expected_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pack_path, _ = self.generate(tmp)
+            agent_pack = pathlib.Path(tmp) / "agent-pack.json"
+            result = self.run_harness("redact", pack_path, agent_pack, "--json")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            raw = agent_pack.read_text(encoding="utf-8")
+            payload = json.loads(raw)
+            self.assertNotIn("seed", raw.lower())
+            self.assertNotIn("expected", raw.lower())
+            self.assertEqual(set(payload["cases"]), CASE_KEYS)
+            self.assertIn("source_pack_sha256", payload)
+
+            workspace = pathlib.Path(tmp) / "agent-workspace"
+            result = self.run_harness("prepare-agent", agent_pack, "writing-noop", workspace, "--json")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            prepared = json.loads(result.stdout)
+            self.assertEqual(set(prepared), {"case_id", "workspace", "prompt"})
+
     def test_prepare_hides_expected_state_and_grade_enforces_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             pack_path, pack = self.generate(tmp)
