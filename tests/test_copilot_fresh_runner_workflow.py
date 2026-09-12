@@ -65,6 +65,17 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
             text.index("Run isolated Copilot trial"),
         )
 
+    def test_auto_model_is_attested_and_actual_model_is_bound_to_receipt(self):
+        text = self.workflow_text()
+        self.assertIn("default: auto", text)
+        self.assertIn("--output-format=json", text)
+        self.assertIn("copilot-events.jsonl", text)
+        self.assertIn("python copilot_event_parser.py resolve-model", text)
+        self.assertIn("ACTUAL_MODEL_ID=", text)
+        self.assertIn('"$ACTUAL_MODEL_ID"', text)
+        self.assertIn('--model-id "$ACTUAL_MODEL_ID"', text)
+        self.assertNotIn('--model-id "$MODEL_ID"', text)
+
 
 if __name__ == "__main__":
     unittest.main()
