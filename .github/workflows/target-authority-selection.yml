@@ -159,6 +159,7 @@ jobs:
     outputs:
       matrix: ${{ steps.bundle.outputs.matrix }}
     env:
+      GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v4
@@ -174,6 +175,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ "$GITHUB_RUN_ATTEMPT" != "1" ]; then
+            echo "Refusing selection rerun before hidden generation; use an exact-bundle repair path." >&2
+            exit 1
+          fi
           BUNDLE="$RUNNER_TEMP/selection-hidden-bundle"
           seed=$(python - <<'PY'
           import secrets
