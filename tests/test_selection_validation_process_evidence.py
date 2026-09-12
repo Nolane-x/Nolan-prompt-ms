@@ -1,12 +1,11 @@
 import json
 import pathlib
-import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 
-import selection_validation as selection
+import selection_process_evidence as process
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "selection_validation.py"
@@ -35,7 +34,7 @@ class SelectionValidationProcessEvidenceTests(unittest.TestCase):
         path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
         return path
 
-    def test_probe_cell_requires_real_bash_probe_event_not_transcript_words(self):
+    def test_probe_cell_requires_real_bash_probe_event_not_model_self_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             bundle, manifest = self.generate(root)
@@ -43,18 +42,12 @@ class SelectionValidationProcessEvidenceTests(unittest.TestCase):
                 case for case in manifest["cases"]
                 if case["cell_id"] == "probe_resolvable_ambiguity" and case["replicate"] == 1
             )
-            case_root = bundle / "cases" / case["id"]
-            workspace = root / "probe-workspace"
-            shutil.copytree(case_root / "visible" / "fixture", workspace)
-
             self_report_only = self.write_events(root, "self-report", [
                 {"type": "assistant.message", "data": {"content": "I ran python probe.py"}},
             ])
-            grade = selection.grade_case(
-                case_root, workspace, "probe.py", events_path=self_report_only
-            )
-            self.assertFalse(grade["passed"])
-            self.assertFalse(grade["checks"]["required_process_evidence"])
+            evidence = process.extract_case_evidence(bundle, case["id"], self_report_only)
+            self.assertFalse(evidence["passed"])
+            self.assertNotIn("probe.py", evidence["trusted_transcript"])
 
             executed = self.write_events(root, "executed", [
                 {
@@ -62,18 +55,17 @@ class SelectionValidationProcessEvidenceTests(unittest.TestCase):
                     "data": {"toolName": "bash", "arguments": {"command": "python probe.py"}},
                 },
             ])
-            grade = selection.grade_case(case_root, workspace, "probe.py", events_path=executed)
-            self.assertTrue(grade["passed"])
+            evidence = process.extract_case_evidence(bundle, case["id"], executed)
+            self.assertTrue(evidence["passed"])
+            self.assertIn("probe.py", evidence["trusted_transcript"])
+            self.assertIn("events_sha256", evidence)
+            self.assertIn("extractor_sha256", evidence)
 
-    def test_authoritative_state_cell_requires_post_publish_file_read_event(self):
+    def test_authoritative_state_requires_file_read_after_publish_execution(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             bundle, manifest = self.generate(root)
             case = next(case for case in manifest["cases"] if case["cell_id"] == "verify_authoritative_state")
-            case_root = bundle / "cases" / case["id"]
-            workspace = root / "verify-workspace"
-            shutil.copytree(case_root / "visible" / "fixture", workspace)
-            selection.run_reference(case_root, workspace)
 
             publish_only = self.write_events(root, "publish-only", [
                 {
@@ -82,13 +74,10 @@ class SelectionValidationProcessEvidenceTests(unittest.TestCase):
                 },
                 {"type": "assistant.message", "data": {"content": "release.json is correct"}},
             ])
-            grade = selection.grade_case(
-                case_root,
-                workspace,
-                "publish.py release.json",
-                events_path=publish_only,
-            )
-            self.assertFalse(grade["passed"])
+            evidence = process.extract_case_evidence(bundle, case["id"], publish_only)
+            self.assertFalse(evidence["passed"])
+            self.assertIn("publish.py", evidence["trusted_transcript"])
+            self.assertNotIn("release.json", evidence["trusted_transcript"])
 
             verified = self.write_events(root, "verified", [
                 {
@@ -100,13 +89,22 @@ class SelectionValidationProcessEvidenceTests(unittest.TestCase):
                     "data": {"toolName": "view", "arguments": {"path": "release.json"}},
                 },
             ])
-            grade = selection.grade_case(
-                case_root,
-                workspace,
-                "publish.py release.json",
-                events_path=verified,
-            )
-            self.assertTrue(grade["passed"])
+            evidence = process.extract_case_evidence(bundle, case["id"], verified)
+            self.assertTrue(evidence["passed"])
+            self.assertIn("publish.py", evidence["trusted_transcript"])
+            self.assertIn("release.json", evidence["trusted_transcript"])
+
+    def test_cells_without_process_requirement_emit_valid_empty_trusted_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            bundle, manifest = self.generate(root)
+            case = next(case for case in manifest["cases"] if case["cell_id"] == "preserve_already_satisfied")
+            events = self.write_events(root, "none", [
+                {"type": "assistant.message", "data": {"content": "done"}},
+            ])
+            evidence = process.extract_case_evidence(bundle, case["id"], events)
+            self.assertTrue(evidence["passed"])
+            self.assertEqual(evidence["trusted_transcript"], "")
 
 
 if __name__ == "__main__":
