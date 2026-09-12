@@ -16,6 +16,7 @@ HARNESS = pathlib.Path(__file__).resolve()
 MANIFEST = ROOT / "evals" / "evals.json"
 CASES = ROOT / "evals" / "cases"
 SKILL = ROOT / "verified-delta" / "SKILL.md"
+REQUIRED_METRICS = ("input_tokens", "output_tokens", "tool_calls", "wall_time_ms")
 
 
 def load_manifest() -> dict:
@@ -44,6 +45,21 @@ def sha256_tree(root: pathlib.Path) -> str:
         digest.update(content_digest)
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def validate_metrics(metrics: object) -> dict:
+    if not isinstance(metrics, dict):
+        raise ValueError("metrics must be a JSON object")
+    missing = [name for name in REQUIRED_METRICS if name not in metrics]
+    if missing:
+        raise ValueError(f"metrics missing required fields: {', '.join(missing)}")
+    for name in REQUIRED_METRICS:
+        value = metrics[name]
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"metrics field {name} must be null or a non-negative integer")
+    return metrics
 
 
 def run_grader(case_id: str, workspace: pathlib.Path) -> dict:
@@ -144,6 +160,7 @@ def command_record(
     else:
         raise ValueError(f"unsupported condition: {condition}")
 
+    metrics = validate_metrics(json.loads(metrics_path.read_text(encoding="utf-8")))
     case_root = CASES / case_id
     eval_provenance = {
         "harness_sha256": sha256_file(HARNESS),
@@ -154,7 +171,6 @@ def command_record(
     workspace_sha256 = sha256_tree(workspace)
     grade = run_grader(case_id, workspace)
     transcript_bytes = transcript_path.read_bytes()
-    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     payload = {
         "schema_version": 1,
         "case_id": case_id,
