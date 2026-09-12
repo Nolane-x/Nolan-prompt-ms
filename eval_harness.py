@@ -273,15 +273,24 @@ def command_summarize(receipt_paths: list[pathlib.Path], as_json: bool) -> int:
     pairs: list[dict] = []
     for (case_id, pair_id), receipts in sorted(groups.items()):
         by_replicate: dict[int, dict[str, dict]] = {}
+        duplicate_issues: dict[int, list[str]] = {}
         for receipt in receipts:
-            by_replicate.setdefault(receipt["replicate"], {})[receipt["condition"]] = receipt
+            replicate = receipt["replicate"]
+            condition = receipt["condition"]
+            conditions = by_replicate.setdefault(replicate, {})
+            if condition in conditions:
+                duplicate_issues.setdefault(replicate, []).append(
+                    f"replicate {replicate} duplicate {condition} receipt"
+                )
+                continue
+            conditions[condition] = receipt
 
         issues: list[str] = []
         replicates: list[dict] = []
         counts = {name: 0 for name in EFFECT_NAMES}
         for replicate, conditions in sorted(by_replicate.items()):
             missing = [condition for condition in ("U0", "U1") if condition not in conditions]
-            replicate_issues: list[str] = []
+            replicate_issues = list(duplicate_issues.get(replicate, []))
             if missing:
                 replicate_issues.append(f"replicate {replicate} missing {'/'.join(missing)}")
             else:
