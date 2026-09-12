@@ -12,7 +12,6 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
 
     def test_workflow_is_manual_and_least_privilege(self):
         text = self.workflow_text()
-
         self.assertIn("workflow_dispatch:", text)
         self.assertNotIn("\n  push:", text)
         self.assertNotIn("\n  pull_request:", text)
@@ -21,7 +20,6 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
 
     def test_trials_are_fresh_bounded_and_failure_preserving(self):
         text = self.workflow_text()
-
         self.assertIn("condition: [U0, U1]", text)
         self.assertIn("$RUNNER_TEMP", text)
         self.assertIn("COPILOT_HOME", text)
@@ -34,7 +32,6 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
 
     def test_u1_binds_exact_skill_and_every_trial_records_a_receipt(self):
         text = self.workflow_text()
-
         self.assertIn('if [ "$CONDITION" = "U1" ]; then', text)
         self.assertIn("verified-delta/SKILL.md", text)
         self.assertIn("force-loaded-skill", text)
@@ -49,7 +46,6 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
 
     def test_pair_pins_one_cli_version_and_summarizes_both_receipts(self):
         text = self.workflow_text()
-
         self.assertIn("npm view @github/copilot version", text)
         self.assertIn("needs: resolve", text)
         self.assertIn('@github/copilot@${{ needs.resolve.outputs.copilot_version }}', text)
@@ -57,6 +53,17 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
         self.assertIn("python eval_harness.py summarize", text)
         self.assertIn("pair-summary", text)
         self.assertIn("not_comparable", text)
+
+    def test_dispatch_inputs_are_validated_before_trial_jobs(self):
+        text = self.workflow_text()
+        self.assertIn("Validate dispatch inputs before any Copilot trial", text)
+        self.assertIn('[[ "$REPLICATE_INPUT" =~ ^[1-9][0-9]*$ ]]', text)
+        self.assertIn('[[ -n "${MODEL_INPUT//[[:space:]]/}" ]]', text)
+        self.assertIn("needs: [validate, resolve]", text)
+        self.assertLess(
+            text.index("Validate dispatch inputs before any Copilot trial"),
+            text.index("Run isolated Copilot trial"),
+        )
 
 
 if __name__ == "__main__":
