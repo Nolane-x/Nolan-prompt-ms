@@ -61,6 +61,46 @@ class SelectionValidationProcessEvidenceTests(unittest.TestCase):
             self.assertIn("events_sha256", evidence)
             self.assertIn("extractor_sha256", evidence)
 
+    def test_unrelated_tool_metadata_cannot_satisfy_process_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            bundle, manifest = self.generate(root)
+            probe_case = next(
+                case for case in manifest["cases"]
+                if case["cell_id"] == "probe_resolvable_ambiguity" and case["replicate"] == 1
+            )
+            probe_events = self.write_events(root, "probe-metadata", [
+                {
+                    "type": "tool.execution_start",
+                    "data": {
+                        "toolName": "bash",
+                        "arguments": {"language": "python", "target": "probe.py"},
+                    },
+                },
+            ])
+            self.assertFalse(process.extract_case_evidence(bundle, probe_case["id"], probe_events)["passed"])
+
+            release_case = next(
+                case for case in manifest["cases"] if case["cell_id"] == "verify_authoritative_state"
+            )
+            release_events = self.write_events(root, "release-metadata", [
+                {
+                    "type": "tool.execution_start",
+                    "data": {
+                        "toolName": "bash",
+                        "arguments": {"language": "python", "target": "publish.py"},
+                    },
+                },
+                {
+                    "type": "tool.execution_start",
+                    "data": {
+                        "toolName": "bash",
+                        "arguments": {"verb": "cat ", "target": "release.json"},
+                    },
+                },
+            ])
+            self.assertFalse(process.extract_case_evidence(bundle, release_case["id"], release_events)["passed"])
+
     def test_authoritative_state_requires_file_read_after_publish_execution(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
