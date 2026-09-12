@@ -7,22 +7,50 @@ on:
 
 permissions:
   contents: read
-  actions: write
+  copilot-requests: write
 
 jobs:
-  dispatch:
+  probe:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Dispatch exactly one paired behavioral trial on main
+      - name: Install pinned Copilot CLI
+        shell: bash
+        run: npm install -g @github/copilot@1.0.83
+
+      - name: Probe Auto model resolution without repository writes
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          gh workflow run behavioral-u0-u1.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main \
-            -f case_id=false-completion-state \
-            -f model=claude-sonnet-4.6 \
-            -f reasoning_effort=high \
-            -f replicate=1
+          mkdir -p "$RUNNER_TEMP/copilot-auto-probe"
+          export COPILOT_HOME="$RUNNER_TEMP/copilot-auto-home"
+          set +e
+          copilot \
+            --prompt='Reply with exactly OK.' \
+            --model=auto \
+            --output-format=json \
+            --available-tools='view' \
+            --no-ask-user \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            > "$RUNNER_TEMP/copilot-auto-probe/stdout.jsonl" \
+            2> "$RUNNER_TEMP/copilot-auto-probe/stderr.txt"
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$RUNNER_TEMP/copilot-auto-probe/exit-code.txt"
+          cat "$RUNNER_TEMP/copilot-auto-probe/stdout.jsonl"
+          cat "$RUNNER_TEMP/copilot-auto-probe/stderr.txt" >&2
+          exit "$status"
+
+      - name: Preserve Auto probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: copilot-auto-probe-${{ github.run_id }}
+          path: ${{ runner.temp }}/copilot-auto-probe
+          if-no-files-found: error
