@@ -59,71 +59,74 @@ The three-replicate target-authority stability result is preserved in `evals/tar
 - partial `candidate_harm`: **0/3**;
 - partial `same_pass`: **3/3**.
 
-All six pairs were comparable under the recorded `gpt-5.6-luna` / actual reasoning `medium` / Copilot CLI `1.0.83` configuration. R1A passed the preregistered **development-stability** rule. This did not grant runtime residency or cross-domain validity.
+All six pairs were comparable under the recorded `gpt-5.6-luna` / actual reasoning `medium` / Copilot CLI `1.0.83` development configuration. R1A passed the preregistered **development-stability** rule. This did not grant runtime residency or cross-domain validity.
 
-## Selection-Validation Boundary — Frozen, Ready to Dispatch
+## Selection-Validation Boundary — Frozen
 
-The next evidence boundary is preregistered in `evals/target-authority-selection-plan.json`, blob `1b95c5d3658d56e9aa8f25f699b64c63f3380c2d`.
+The next behavioral evidence boundary is preregistered in `evals/target-authority-selection-plan.json`, blob `1b95c5d3658d56e9aa8f25f699b64c63f3380c2d`.
 
-The plan freezes the same treatment identities:
+The plan freezes:
 
 - R1 blob `ac48f09ab02eca63e014b4c25f86e492ae5559cb`;
-- R1A blob `26d93ce346deedccd7186ad5856f849136825ec3`.
+- R1A blob `26d93ce346deedccd7186ad5856f849136825ec3`;
+- six semantic cells with two paired replicates each;
+- **12 paired replicates / 24 model trials** excluding infrastructure failures and non-comparable evidence;
+- matched causal dimensions, contamination rule, no behavioral early stopping, and the literal decision rule.
 
-It defines six semantic cells with two paired replicates each:
+The semantic cells are: target already satisfied → preserve; target-relevant defect remains → act; tempting outside-target improvement → preserve; explicit broader requirement → act; consequential ambiguity → probe then preserve/act from evidence; successful-looking proxy → verify authoritative state.
 
-1. target already satisfied → preserve;
-2. target-relevant defect remains → act;
-3. tempting outside-target improvement → preserve;
-4. explicit broader requirement → act;
-5. consequential ambiguity resolvable by a discriminating probe → probe, then preserve/act from evidence;
-6. successful-looking proxy state → verify authoritative state.
+Frozen decision rule requires all 12 pairs comparable, `candidate_harm == 0`, all 8 act/probe/verify R1A replicates passing, at least 3/4 preserve R1A replicates passing, and at least 2 `candidate_gain` results among the four preserve pairs.
 
-The cells span at least four distinct task families outside username normalization. Fixed budget: **12 paired replicates / 24 model trials**, excluding infrastructure failures and non-comparable evidence.
+Infrastructure failures may be retried without becoming behavioral samples. Behavioral failures must be preserved and must not be used to retune R1A on the same hidden instances. Even a pass grants at most **selection-stable under the observed harness/model configuration; not runtime-resident**.
 
-The final execution seed, prompts, fixture values, and expected answers are deliberately **not committed and have not been generated or executed**. Every final instance must be generated only at execution time from one recorded seed and every generated instance must be used. Leakage into the candidate-design surface fails the validation boundary rather than being silently replaced.
+## First Dispatch — Invalid Infrastructure Run, No Behavioral Evidence
 
-Matched comparison requires the same generated case/fixture identity plus actual model, actual reasoning effort, harness/CLI version, observed runtime tool set, tool policy, prompt language, limits, generator/grader provenance, clean environment, and replicate identity. Mismatch is `not_comparable`.
+Manual run `34699852491` was dispatched from `main@e8a1c1fe6d1e2ba43d643cdde2c5d0be15d2940b` with explicit model `gpt-5.6-luna`, reasoning `medium`, and seed `selection-98cad77b1b9b496186f2fcefc9ffbaff`.
 
-Frozen decision rule requires all of:
+`validate`, `generate`, and `resolve` succeeded, but Copilot CLI `1.0.83` rejected the model before successful inference:
 
-- all 12 pairs comparable;
-- `candidate_harm == 0` across all 12;
-- R1A passes all 8 act/probe/verify replicates;
-- R1A passes at least 3/4 preserve replicates;
-- `candidate_gain >= 2` across the four preserve replicates.
+`Error: Model "gpt-5.6-luna" from --model flag is not available.`
 
-There is no behavioral early stopping. Infrastructure failures may be retried with the same frozen identity and do not count as behavioral samples. If R1A fails, preserve the evidence and do not tune R1A on these same instances. If it passes, the strongest allowed status is **selection-stable under the observed harness/model configuration; not runtime-resident**.
+Trial jobs therefore failed at the receipt boundary with nonzero Copilot exits. Raw evidence was preserved, but no valid behavioral receipts were produced. This run is **infrastructure failure only**. It does not count toward the frozen behavioral budget and it must not be summarized as R1 or R1A performance.
 
-## Selection Execution Infrastructure — Integrated, Not Behavioral Evidence
+The failed run also exposed a stronger experiment-integrity issue in the original workflow: the externally supplied seed was present in the trial environment while the repository generator remained checked out during inference. Because the evaluated agent had bounded Python shell access, that surface was unnecessarily reconstructible even though the hidden bundle itself had been deleted.
 
-The frozen plan has a merged execution boundary:
+## Hardened Selection Execution Boundary
 
-- `selection_validation.py` validates frozen plan/treatment identities, generates exactly 12 deterministic fresh cases from an explicit execution seed, keeps visible and hidden surfaces separate, admits every reference path, prepares only agent-visible state, records immutable receipts, fails closed on provenance/comparability drift, and evaluates the literal preregistered rule.
-- `selection_process_evidence.py` derives process evidence only from structured `tool.execution_start` arguments. Assistant prose and unrelated metadata strings cannot satisfy probe or authoritative-state requirements.
-- `.github/workflows/target-authority-selection.yml` is manual-only. It generates/admit one hidden bundle before inference, pins one Copilot CLI version across all 24 arms, removes the hidden bundle from each trial filesystem before the model runs, re-downloads it only after inference, attests actual model/reasoning/tool set, and requires exactly 24 immutable receipts before summary.
-- Raw model transcript remains audit material; grader-visible process evidence comes from structured tool events.
-- Normal push/PR CI cannot consume the behavioral budget because the selection workflow has no automatic trigger.
+Branch `fix/selection-runner-preflight-boundary` fixes the infrastructure root cause and leakage boundary without changing R1, R1A, the frozen plan, generator semantics, graders, or decision rule.
 
-PR #25 merged the execution boundary into `main` as commit `e62fde30b6fb722cd122d1041b1179fe7da2f790` after exact-head merge-ref run `34698483551` passed **87/87 tests** plus `python verify.py`. Post-merge `main` run `34698546154` independently passed **87/87 tests** plus `python verify.py` on that merge commit. The runtime remained 446 words.
+The hardened workflow now:
 
-Earlier RED→GREEN infrastructure evidence includes:
+- removes `execution_seed` from `workflow_dispatch` and from every trial environment;
+- defaults to named `gpt-5.4` with reasoning `medium`, while runtime attestation remains authoritative;
+- resolves one Copilot CLI version and runs a minimal model/reasoning preflight **before** any hidden seed or bundle is generated;
+- fails before hidden generation if the requested named model is rejected or attests to a different runtime configuration;
+- creates a fresh seed internally with `secrets.token_hex(32)` only after preflight succeeds, records it in researcher-side generation/bundle evidence, and never passes it to the evaluated agent;
+- admits all reference paths before behavioral trials;
+- prepares the visible workspace and exact arm prompt, deletes the hidden bundle, then scrubs the entire repository checkout before inference;
+- runs the evaluated model only against the prepared task workspace;
+- sets `PYTHONDONTWRITEBYTECODE=1` to prevent incidental Python bytecode from contaminating workspace hashes;
+- restores a trusted checkout and re-downloads the exact hidden bundle only after inference for attestation, process-evidence extraction, grading, and immutable receipt creation;
+- still requires exactly 24 valid receipts before the frozen summary can produce a decision.
 
-- `34694922809` RED → `34694999546` GREEN for the execution harness existence/generator boundary;
-- bytecode-induced non-determinism localized and fixed before `34695184393` GREEN;
-- `34695242624` RED → `34695380305` GREEN for immutable receipts and the decision rule;
-- `34695452037` RED → `34695562998` GREEN for the manual workflow contract;
-- `34695602489` and `34695720095` REDs localized missing trusted process-evidence plumbing;
-- `34695877200` GREEN for the first full tool-event-wired runner;
-- `34698281819` GREEN after structured-argument hardening.
+TDD evidence for this hardening:
 
-These runs are repository/infrastructure evidence only. They are not selection behavioral samples.
+- test-only commit `2e077cdca04cf8b67270ec5fcea93fa24409d669` → run `34700203085` RED with exactly four new workflow-boundary failures while prior tests remained green;
+- implementation commit `76fa7741ce6c525b321b72bbbd6c60a822392298` → run `34700371261` GREEN, including full unit discovery and `python verify.py`.
+
+These runs are infrastructure evidence only, not selection behavioral evidence.
+
+## Earlier Selection Infrastructure Evidence
+
+PR #25 merged the original execution boundary into `main` as `e62fde30b6fb722cd122d1041b1179fe7da2f790` after exact-head merge-ref run `34698483551` passed **87/87 tests** plus `python verify.py`. Post-merge run `34698546154` independently passed **87/87 tests** plus `python verify.py`; later state reconciliation landed at `e8a1c1fe6d1e2ba43d643cdde2c5d0be15d2940b`.
+
+Earlier RED→GREEN infrastructure evidence includes `34694922809` → `34694999546` for generator existence, `34695242624` → `34695380305` for immutable receipts/decision evaluation, `34695452037` → `34695562998` for manual workflow contract, and `34695602489` / `34695720095` → `34695877200` for trusted process-evidence plumbing. `34698281819` was GREEN after structured-argument hardening.
 
 ## Open Debts
 
-1. **The frozen 24-trial selection-validation experiment has not run.** All repository gates needed before dispatch are now green; the next evidence-producing action is the single manual dispatch.
-2. **Final hidden instances remain genuinely fresh and unseen.** Do not publish or tune against them before execution.
-3. **Final cross-domain hidden holdout remains open even if selection validation passes.**
+1. **The frozen 24-trial selection-validation experiment still has no valid behavioral run.** Merge and verify the hardened runner, then dispatch it once with a preflight-supported named model/reasoning configuration.
+2. Final hidden instances for the valid run must remain fresh and unseen by the evaluated agent. Do not publish or tune against them before execution.
+3. Final cross-domain hidden holdout remains open even if selection validation passes.
 4. Provider snapshot immutability remains unavailable.
 5. Independent W5 r4 verification remains missing.
 6. Primitive competition R0–R8 remains unexecuted.
@@ -147,6 +150,7 @@ These runs are repository/infrastructure evidence only. They are not selection b
 - Reusing observed development prompts as a hidden holdout.
 - Rewriting a candidate after seeing validation/holdout failures and rerunning the same cases as if still unseen.
 - Promoting development-stable or selection-stable evidence directly to runtime residency.
+- Exposing a deterministic hidden-case seed or generator checkout to the evaluated agent when the orchestration layer can avoid doing so.
 
 ## W5 Boundary
 
@@ -158,13 +162,13 @@ Unresolved research question:
 
 ## Next Best Action
 
-Keep `verified-delta/SKILL.md`, R1A wording, the generator, and the frozen selection decision rule unchanged.
+Keep `verified-delta/SKILL.md`, R1A wording, `selection_validation.py` case-generation semantics, and the frozen decision rule unchanged.
 
-Dispatch `.github/workflows/target-authority-selection.yml` **exactly once** from current `main` with one fresh execution-time seed for all 24 arms. Prefer a named model/reasoning configuration if available so paired-arm routing remains stable; runtime attestation remains authoritative.
+First merge the hardened selection-runner boundary only after exact-head tests plus `python verify.py` are green, then confirm post-merge `main` CI. After that, manually dispatch `.github/workflows/target-authority-selection.yml` once with `model=gpt-5.4` and `reasoning_effort=medium`. The preflight must pass before the workflow is allowed to create the final hidden bundle.
 
-Preserve the resulting generation/admission artifacts, all immutable arm receipts, and the summary exactly as observed. A behavioral failure is a valid result; a non-comparable or infrastructure-incomplete run is not a treatment result. Do not tune R1A on the generated selection instances.
+Preserve the resulting preflight, generation/admission artifacts, all immutable arm receipts, and summary exactly as observed. Retry only infrastructure failures. A behavioral failure is a valid result; a non-comparable or infrastructure-incomplete run is not a treatment result. Do not tune R1A on generated selection instances.
 
-The current ChatGPT GitHub connector can inspect and re-run existing Actions runs but does not expose creation of a `workflow_dispatch` event. That tooling limitation is external to the repository and is not evidence about R1/R1A.
+The current ChatGPT GitHub connector can inspect and re-run existing Actions runs but does not expose creation of a new `workflow_dispatch` event. That tooling limitation is external to the repository and is not evidence about R1/R1A.
 
 ## Update Rule
 

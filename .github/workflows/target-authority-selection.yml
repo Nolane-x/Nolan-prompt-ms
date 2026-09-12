@@ -3,19 +3,15 @@ name: target-authority-selection
 on:
   workflow_dispatch:
     inputs:
-      execution_seed:
-        description: Fresh execution seed for the frozen hidden selection bundle
-        required: true
-        type: string
       model:
         description: Copilot model identifier or auto
         required: true
-        default: auto
+        default: gpt-5.4
         type: string
       reasoning_effort:
         description: Reasoning effort, or default to omit the flag
         required: true
-        default: default
+        default: medium
         type: choice
         options:
           - default
@@ -31,7 +27,6 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     env:
-      EXECUTION_SEED: ${{ inputs.execution_seed }}
       MODEL_INPUT: ${{ inputs.model }}
       REASONING_INPUT: ${{ inputs.reasoning_effort }}
     steps:
@@ -39,20 +34,132 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$EXECUTION_SEED" =~ ^[A-Za-z0-9._:-]{16,128}$ ]]
           [[ -n "${MODEL_INPUT//[[:space:]]/}" ]]
           if [ "$MODEL_INPUT" = "auto" ] && [ "$REASONING_INPUT" != "default" ]; then
             echo "Auto model selection does not accept an explicit reasoning-effort flag in this harness." >&2
             exit 1
           fi
 
-  generate:
+  resolve:
     needs: validate
+    runs-on: ubuntu-latest
+    outputs:
+      copilot_version: ${{ steps.version.outputs.copilot_version }}
+    steps:
+      - id: version
+        name: Resolve one Copilot CLI version for preflight and all 24 trials
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(npm view @github/copilot version)
+          test -n "$version"
+          echo "copilot_version=$version" >> "$GITHUB_OUTPUT"
+
+  preflight:
+    needs: [validate, resolve]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      copilot-requests: write
+    env:
+      MODEL_ID: ${{ inputs.model }}
+      REASONING_EFFORT: ${{ inputs.reasoning_effort }}
+      GITHUB_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the exact Copilot CLI version selected for the experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g "@github/copilot@${{ needs.resolve.outputs.copilot_version }}"
+          mkdir -p "$RUNNER_TEMP/selection-preflight"
+          copilot --version > "$RUNNER_TEMP/selection-preflight/copilot-version.txt"
+
+      - name: Preflight requested model and reasoning before any hidden bundle exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREFLIGHT_ROOT="$RUNNER_TEMP/selection-preflight"
+          PREFLIGHT_WORKSPACE="$PREFLIGHT_ROOT/workspace"
+          export COPILOT_HOME="$RUNNER_TEMP/copilot-selection-preflight-home"
+          mkdir -p "$PREFLIGHT_WORKSPACE" "$COPILOT_HOME"
+
+          REASONING_ARGS=()
+          if [ "$REASONING_EFFORT" != "default" ]; then
+            REASONING_ARGS+=("--reasoning-effort=$REASONING_EFFORT")
+          fi
+
+          copilot \
+            -C "$PREFLIGHT_WORKSPACE" \
+            --prompt="Reply with exactly OK. Do not use tools." \
+            --model="$MODEL_ID" \
+            "${REASONING_ARGS[@]}" \
+            --output-format=json \
+            --available-tools='bash,create,edit,view,glob,grep' \
+            --allow-tool='write,shell(python:*)' \
+            --disable-builtin-mcps \
+            --no-ask-user \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            >"$PREFLIGHT_ROOT/copilot-events.jsonl" \
+            2>"$PREFLIGHT_ROOT/copilot.stderr.txt"
+
+          python copilot_event_parser.py attest-runtime \
+            "$PREFLIGHT_ROOT/copilot-events.jsonl" --json \
+            > "$PREFLIGHT_ROOT/runtime-attestation.json"
+
+          python - \
+            "$PREFLIGHT_ROOT/runtime-attestation.json" \
+            "$MODEL_ID" \
+            "$REASONING_EFFORT" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          attestation = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          requested_model = sys.argv[2]
+          requested_effort = sys.argv[3]
+          actual_model = attestation.get("model")
+          actual_effort = attestation.get("reasoning_effort")
+
+          if requested_model != "auto" and actual_model != requested_model:
+              raise SystemExit(
+                  f"preflight model mismatch: requested={requested_model!r} actual={actual_model!r}"
+              )
+          if requested_effort != "default" and actual_effort != requested_effort:
+              raise SystemExit(
+                  f"preflight reasoning mismatch: requested={requested_effort!r} actual={actual_effort!r}"
+              )
+          PY
+
+      - name: Preserve model preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selection-preflight-${{ github.run_id }}
+          path: ${{ runner.temp }}/selection-preflight
+          if-no-files-found: error
+          retention-days: 30
+
+  generate:
+    needs: preflight
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.bundle.outputs.matrix }}
     env:
-      EXECUTION_SEED: ${{ inputs.execution_seed }}
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,15 +170,21 @@ jobs:
           python-version: "3.12"
 
       - id: bundle
-        name: Generate one frozen hidden bundle and admit all reference paths
+        name: Generate one frozen hidden bundle with a private execution seed and admit all reference paths
         shell: bash
         run: |
           set -euo pipefail
           BUNDLE="$RUNNER_TEMP/selection-hidden-bundle"
+          seed=$(python - <<'PY'
+          import secrets
+          print("selection-" + secrets.token_hex(32))
+          PY
+          )
           python selection_validation.py generate \
-            --seed "$EXECUTION_SEED" \
+            --seed "$seed" \
             --output "$BUNDLE" \
             --json > "$RUNNER_TEMP/selection-generation.json"
+          unset seed
           python selection_validation.py admit "$BUNDLE" --json \
             > "$RUNNER_TEMP/selection-admission.json"
           matrix=$(python - "$RUNNER_TEMP/selection-generation.json" <<'PY'
@@ -106,23 +219,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  resolve:
-    needs: validate
-    runs-on: ubuntu-latest
-    outputs:
-      copilot_version: ${{ steps.version.outputs.copilot_version }}
-    steps:
-      - id: version
-        name: Resolve one Copilot CLI version for all 24 trials
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(npm view @github/copilot version)
-          test -n "$version"
-          echo "copilot_version=$version" >> "$GITHUB_OUTPUT"
-
   trial:
-    needs: [validate, generate, resolve]
+    needs: [generate, resolve]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -137,9 +235,9 @@ jobs:
       ARM: ${{ matrix.arm }}
       MODEL_ID: ${{ inputs.model }}
       REASONING_EFFORT: ${{ inputs.reasoning_effort }}
-      EXECUTION_SEED: ${{ inputs.execution_seed }}
       HARNESS_ID: github-copilot-selection-v1
       GITHUB_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -203,7 +301,15 @@ jobs:
           npm install -g "@github/copilot@${{ needs.resolve.outputs.copilot_version }}"
           copilot --version > "$RUNNER_TEMP/selection-trial/copilot-version.txt"
 
-      - name: Run isolated frozen-arm trial without hidden bundle present
+      - name: Scrub repository checkout before inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+          test -z "$(find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit)"
+          test ! -e "$RUNNER_TEMP/selection-bundle-before"
+
+      - name: Run isolated frozen-arm trial without hidden bundle or repository present
         shell: bash
         run: |
           set -euo pipefail
@@ -212,6 +318,7 @@ jobs:
           export COPILOT_HOME="$RUNNER_TEMP/copilot-selection-home-$CASE_ID-$ARM"
           mkdir -p "$COPILOT_HOME"
           test ! -e "$RUNNER_TEMP/selection-bundle-before"
+          test -z "$(find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit)"
 
           REASONING_ARGS=()
           if [ "$REASONING_EFFORT" != "default" ]; then
@@ -253,6 +360,12 @@ jobs:
               cat "$TRIAL_ROOT/copilot.stderr.txt"
             } > "$TRIAL_ROOT/transcript.md"
           fi
+
+      - name: Restore trusted repository checkout after inference
+        if: always()
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Re-download the exact admitted bundle after inference
         if: always()
@@ -450,6 +563,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v4
         with:
