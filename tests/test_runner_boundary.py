@@ -19,20 +19,75 @@ class RunnerBoundaryTests(unittest.TestCase):
             check=False,
         )
 
+    def prepare(self, case_id: str, workspace: pathlib.Path):
+        result = self.run_harness("prepare", case_id, str(workspace), "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return json.loads(result.stdout)
+
     def test_prepare_json_exposes_only_agent_run_inputs(self):
         with tempfile.TemporaryDirectory() as td:
             workspace = pathlib.Path(td) / "workspace"
-            result = self.run_harness(
-                "prepare",
-                "username-normalization-noop",
-                str(workspace),
-                "--json",
-            )
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            payload = json.loads(result.stdout)
+            payload = self.prepare("username-normalization-noop", workspace)
             self.assertEqual(set(payload), {"case_id", "workspace", "prompt"})
             self.assertNotIn("expected_output", payload)
             self.assertTrue(payload["prompt"].strip())
+
+    def test_record_rejects_invalid_metrics_without_writing_receipt(self):
+        invalid_metrics = [
+            {
+                "input_tokens": -1,
+                "output_tokens": 10,
+                "tool_calls": 1,
+                "wall_time_ms": 100,
+            },
+            {
+                "input_tokens": "100",
+                "output_tokens": 10,
+                "tool_calls": 1,
+                "wall_time_ms": 100,
+            },
+            {
+                "input_tokens": 100,
+                "output_tokens": 10,
+                "tool_calls": 1,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            workspace = root / "workspace"
+            self.prepare("username-normalization-noop", workspace)
+            transcript = root / "transcript.txt"
+            transcript.write_text("fresh isolated trial\n", encoding="utf-8")
+
+            for index, metrics_payload in enumerate(invalid_metrics, start=1):
+                with self.subTest(metrics=metrics_payload):
+                    metrics = root / f"metrics-{index}.json"
+                    metrics.write_text(json.dumps(metrics_payload), encoding="utf-8")
+                    receipt = root / f"receipt-{index}.json"
+                    result = self.run_harness(
+                        "record",
+                        "username-normalization-noop",
+                        str(workspace),
+                        str(receipt),
+                        "--condition",
+                        "U0",
+                        "--pair-id",
+                        "pair-a",
+                        "--replicate",
+                        "1",
+                        "--model-id",
+                        "fresh-model",
+                        "--harness-id",
+                        "isolated-harness",
+                        "--transcript",
+                        str(transcript),
+                        "--metrics",
+                        str(metrics),
+                        "--json",
+                    )
+                    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                    self.assertIn("metrics", result.stderr.lower())
+                    self.assertFalse(receipt.exists())
 
 
 if __name__ == "__main__":
