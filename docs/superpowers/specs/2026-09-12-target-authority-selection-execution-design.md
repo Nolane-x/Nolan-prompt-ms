@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Implement the execution boundary for the already frozen `evals/target-authority-selection-plan.json` without changing R1, R1A, the preregistered decision rule, or the evidence class. This milestone produces infrastructure only: deterministic hidden-at-execution instance generation, reference-path admission, isolated paired execution plumbing, immutable receipts, fail-closed comparability, and decision evaluation. It does not dispatch behavioral model trials.
+Implement the execution boundary for the already frozen `evals/target-authority-selection-plan.json` without changing R1, R1A, the preregistered decision rule, or the evidence class. This milestone produces infrastructure only: deterministic hidden-at-execution instance generation, reference-path admission, isolated paired execution plumbing, immutable receipts, fail-closed comparability, and decision evaluation. It does not itself count infrastructure runs as behavioral evidence.
 
 ## Frozen inputs
 
@@ -10,15 +10,31 @@ The execution layer must refuse to run unless the preregistration remains `targe
 
 ## Generation boundary
 
-Add `selection_validation.py` as a researcher-side stdlib-only harness. `generate` accepts an explicit execution seed and a new output directory. It deterministically creates exactly twelve instances: two for every frozen semantic cell, spanning at least four allowed task families and excluding username-normalization derivatives. The committed source contains generation methods and domain constraints, but no execution-time seed, final prompt instances, final fixture values, or final expected answers.
+`selection_validation.py` is the researcher-side stdlib-only harness. Its `generate` command accepts an explicit seed because deterministic regeneration and testability require a stable API. The production workflow, however, must not accept that seed from the dispatch surface or expose it to trial jobs. The workflow generates a cryptographically fresh execution seed internally only after model/runtime preflight succeeds, records it inside researcher-side generation/bundle evidence, and never places it in the evaluated agent environment.
+
+From that seed `generate` deterministically creates exactly twelve instances: two for every frozen semantic cell, spanning at least four allowed task families and excluding username-normalization derivatives. The committed source contains generation methods and domain constraints, but no final execution seed, final prompt instances, final fixture values, or final expected answers.
 
 Each generated instance is split into an agent-visible surface and a hidden surface. The agent-visible surface contains only the fixture plus task prompt. The hidden surface contains grader/reference material and instance metadata. `prepare` copies only the fixture into a fresh destination and emits the prompt; it must never expose the hidden surface to the evaluated workspace.
 
 All generated instances are used. Generation is immutable: an existing output directory is rejected rather than overwritten.
 
+## Model/runtime preflight
+
+Model availability is an infrastructure property and must be established before hidden instances exist. The workflow first resolves one Copilot CLI version, installs that exact version in a preflight job, performs a minimal model call using the requested named model/reasoning configuration, and validates the resulting JSONL with `copilot_event_parser.py attest-runtime`.
+
+For named models, actual model identity must equal the requested identifier. For explicit reasoning effort, actual reasoning must equal the requested effort. A CLI rejection, routing mismatch, missing attestation, or nonzero exit fails preflight and therefore prevents hidden seed generation. This avoids consuming a fresh selection bundle merely to discover that a provider-facing model identifier is unusable.
+
+The invalid dispatch `34699852491` demonstrated why this is required: Copilot CLI `1.0.83` rejected explicit model `gpt-5.6-luna` before successful inference. That run is infrastructure evidence only and produces no valid behavioral sample.
+
 ## Reference admission
 
-Before any model trial, `admit` executes the generated reference path against a clean copy of every fixture and then runs the deterministic grader. All twelve cases must pass. Missing, malformed, or failing reference/grader material blocks admission. Admission is infrastructure evidence only.
+After preflight and generation, `admit` executes the generated reference path against a clean copy of every fixture and then runs the deterministic grader. All twelve cases must pass. Missing, malformed, or failing reference/grader material blocks admission. Admission is infrastructure evidence only.
+
+## Trial filesystem boundary
+
+A trial may briefly receive the hidden bundle only for researcher-side `prepare`. After the visible workspace and exact treatment prompt have been materialized, the hidden bundle is deleted. The repository checkout is then scrubbed from `$GITHUB_WORKSPACE` before the evaluated model starts, preventing the agent from reading the generator, the alternate treatment, repository state, or researcher documentation during inference.
+
+The model runs only against the prepared task workspace and prompt. The workflow sets `PYTHONDONTWRITEBYTECODE=1` so Python probes do not create incidental `__pycache__` state that could contaminate final workspace hashes. After inference ends, a trusted checkout is restored and the exact admitted hidden bundle is re-downloaded for researcher-side attestation, process-evidence extraction, grading, and receipt creation.
 
 ## Receipts and provenance
 
@@ -34,16 +50,18 @@ A behavioral failure is a valid experiment result and must still produce a summa
 
 ## Workflow
 
-Add `.github/workflows/target-authority-selection.yml` as `workflow_dispatch` only. One generation/admission job creates the frozen hidden bundle from the supplied seed, resolves a single Copilot CLI version, and emits a dynamic matrix. The matrix runs all twelve cases under both frozen arms in separate clean runner workspaces with separate `COPILOT_HOME`, restricted tools, no built-in MCPs, no custom instructions, no remote mode, and actual runtime attestation from `copilot_event_parser.py`.
+`.github/workflows/target-authority-selection.yml` is `workflow_dispatch` only. Dispatch selects a model and reasoning configuration; it does not supply the hidden execution seed. Validation and one pinned Copilot CLI resolution occur first, followed by the model/runtime preflight. Only after that preflight passes does the generation/admission job create the hidden bundle and dynamic 24-arm matrix.
+
+The matrix runs all twelve cases under both frozen arms in separate clean runner workspaces with separate `COPILOT_HOME`, restricted tools, no built-in MCPs, no custom instructions, no remote mode, and actual runtime attestation from `copilot_event_parser.py`. Each trial has neither hidden bundle nor repository checkout present during inference.
 
 A final job downloads all arm receipts, requires exactly twenty-four unique receipts, runs `selection_validation.py summarize`, uploads the full evidence bundle, and never performs outcome-dependent early stopping. The workflow must not run on push or pull request.
 
 ## Contamination boundary
 
-A generated bundle is mechanically clean only when generation occurs after preregistration freeze, the frozen treatment identities match, no final instance path exists in the repository, and the same bundle is used unchanged for every arm. If the workflow is explicitly marked contaminated or any identity drifts, execution must fail before evidence can count.
+A generated bundle is mechanically clean only when generation occurs after preregistration freeze and successful runtime preflight, the frozen treatment identities match, no final instance path exists in the repository, the execution seed is not exposed to the evaluated agent, and the same bundle is used unchanged for every arm. If the workflow is explicitly marked contaminated or any identity drifts, execution must fail before evidence can count.
 
 ## Verification and non-goals
 
-Development is test-first. Focused tests must cover deterministic generation, hidden-surface isolation, reference admission, immutable receipt/provenance binding, comparability drift, exact decision-rule evaluation, and workflow isolation. Full unit discovery plus `python verify.py` must pass before PR review, and runtime/candidate blobs must remain unchanged.
+Development is test-first. Focused tests must cover deterministic generation, hidden-surface isolation, runtime preflight ordering, private workflow seed generation, repository scrubbing during inference, reference admission, immutable receipt/provenance binding, comparability drift, exact decision-rule evaluation, and workflow isolation. Full unit discovery plus `python verify.py` must pass before PR review, and runtime/candidate blobs must remain unchanged.
 
-This milestone does not dispatch the 24 model trials, modify runtime wording, retune R1A, compare R0/R2-R8, claim provider snapshot immutability, close the final hidden holdout, or grant runtime residency.
+This milestone does not modify runtime wording, retune R1A, compare R0/R2-R8, claim provider snapshot immutability, close the final hidden holdout, or grant runtime residency. A successful 24-trial selection run can establish at most **selection-stable under the observed harness/model configuration; not runtime-resident**.
