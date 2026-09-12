@@ -36,7 +36,21 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      REPLICATE_INPUT: ${{ inputs.replicate }}
+      MODEL_INPUT: ${{ inputs.model }}
+    steps:
+      - name: Validate dispatch inputs before any Copilot trial
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$REPLICATE_INPUT" =~ ^[1-9][0-9]*$ ]]
+          [[ -n "${MODEL_INPUT//[[:space:]]/}" ]]
+
   resolve:
+    needs: validate
     runs-on: ubuntu-latest
     outputs:
       copilot_version: ${{ steps.version.outputs.copilot_version }}
@@ -51,7 +65,7 @@ jobs:
           echo "copilot_version=$version" >> "$GITHUB_OUTPUT"
 
   trial:
-    needs: resolve
+    needs: [validate, resolve]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
