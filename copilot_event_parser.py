@@ -44,6 +44,54 @@ def resolve_model(path: pathlib.Path) -> str:
     return next(iter(observed))
 
 
+def attest_runtime(path: pathlib.Path) -> dict:
+    model = resolve_model(path)
+    efforts = set()
+    tool_calls = 0
+
+    for event in _iter_events(path):
+        event_type = event.get("type")
+        data = event.get("data")
+        if not isinstance(data, dict):
+            continue
+
+        if event_type == "tool.execution_start":
+            tool_calls += 1
+            continue
+
+        if event_type != "session.usage_checkpoint":
+            continue
+
+        states = data.get("promptCacheBreakState")
+        if not isinstance(states, list):
+            continue
+        for state in states:
+            if not isinstance(state, dict):
+                continue
+            models = state.get("models")
+            if not isinstance(models, dict):
+                continue
+            for record in models.values():
+                if not isinstance(record, dict) or record.get("model") != model:
+                    continue
+                effort = record.get("reasoning_effort")
+                if effort is None:
+                    continue
+                if not isinstance(effort, str) or not effort.strip():
+                    raise ValueError("usage checkpoint contains an invalid reasoning effort")
+                efforts.add(effort.strip())
+
+    if len(efforts) != 1:
+        rendered = ", ".join(sorted(efforts)) or "none"
+        raise ValueError(f"expected exactly one actual reasoning effort, observed: {rendered}")
+
+    return {
+        "model": model,
+        "reasoning_effort": next(iter(efforts)),
+        "tool_calls": tool_calls,
+    }
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -52,17 +100,26 @@ def main(argv=None) -> int:
     resolve.add_argument("events", type=pathlib.Path)
     resolve.add_argument("--json", action="store_true")
 
+    attest = subparsers.add_parser("attest-runtime")
+    attest.add_argument("events", type=pathlib.Path)
+    attest.add_argument("--json", action="store_true")
+
     args = parser.parse_args(argv)
     try:
-        model = resolve_model(args.events)
+        if args.command == "resolve-model":
+            result = {"model": resolve_model(args.events)}
+        else:
+            result = attest_runtime(args.events)
     except (OSError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
 
     if args.json:
-        print(json.dumps({"model": model}, sort_keys=True))
+        print(json.dumps(result, sort_keys=True))
+    elif args.command == "resolve-model":
+        print(result["model"])
     else:
-        print(model)
+        print(json.dumps(result, sort_keys=True))
     return 0
 
 
