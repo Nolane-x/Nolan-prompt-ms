@@ -249,6 +249,14 @@ def paired_config_issues(replicate: int, u0: dict, u1: dict) -> list[str]:
     for field in ("model_id", "harness_id", "eval_provenance"):
         if u0[field] != u1[field]:
             issues.append(f"replicate {replicate} {field} mismatch")
+    u0_run_config = u0.get("run_config")
+    u1_run_config = u1.get("run_config")
+    if (u0_run_config is None) != (u1_run_config is None):
+        issues.append(f"replicate {replicate} matched run config mismatch")
+    elif u0_run_config is not None and (
+        u0_run_config.get("matched_sha256") != u1_run_config.get("matched_sha256")
+    ):
+        issues.append(f"replicate {replicate} matched run config mismatch")
     return issues
 
 
