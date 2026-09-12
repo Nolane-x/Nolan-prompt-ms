@@ -225,7 +225,7 @@ def run_reference(case_root: pathlib.Path, workspace: pathlib.Path) -> str:
     write_mapping(workspace, reference["writes"])
     transcript_parts = []
     for command in reference["commands"]:
-        argv = [sys.executable if part == "python" else part for part in command]
+        argv = [sys.executable, "-B", *command[1:]] if command and command[0] == "python" else command
         transcript_parts.append("$ " + " ".join(command))
         result = subprocess.run(argv, cwd=workspace, text=True, capture_output=True, check=False)
         transcript_parts.append(result.stdout)
