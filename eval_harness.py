@@ -62,6 +62,17 @@ def validate_metrics(metrics: object) -> dict:
     return metrics
 
 
+def validate_trial_identity(pair_id: str, replicate: int, model_id: str, harness_id: str) -> None:
+    if not pair_id.strip():
+        raise ValueError("trial pair_id must be non-empty")
+    if replicate < 1:
+        raise ValueError("trial replicate must be at least 1")
+    if not model_id.strip():
+        raise ValueError("trial model_id must be non-empty")
+    if not harness_id.strip():
+        raise ValueError("trial harness_id must be non-empty")
+
+
 def run_grader(case_id: str, workspace: pathlib.Path) -> dict:
     find_case(case_id)
     grader = CASES / case_id / "grader.py"
@@ -153,6 +164,7 @@ def command_record(
     if not metrics_path.is_file():
         raise FileNotFoundError(f"metrics do not exist: {metrics_path}")
 
+    validate_trial_identity(pair_id, replicate, model_id, harness_id)
     if condition == "U0":
         skill = {"loaded": False, "sha256": None}
     elif condition == "U1":
