@@ -1,0 +1,52 @@
+{
+  "experiment": "target-authority-selection-v1",
+  "purpose": "Select R1A only if target-authority behavior generalizes outside the observed username-normalization family without introducing passivity on action-required cases.",
+  "frozen_treatments": {
+    "incumbent": "verified-delta/SKILL.md",
+    "candidate": "evals/candidates/r1-target-authority.md",
+    "incumbent_git_blob": "ac48f09ab02eca63e014b4c25f86e492ae5559cb",
+    "candidate_git_blob": "26d93ce346deedccd7186ad5856f849136825ec3"
+  },
+  "seed_formula_version": "selection-v1",
+  "selected_family_count": 4,
+  "family_catalog": [
+    "retry-cap",
+    "stable-dedupe",
+    "export-suffix",
+    "boolean-flag",
+    "port-fallback",
+    "config-precedence"
+  ],
+  "variants": [
+    "noop",
+    "partial"
+  ],
+  "copilot_trial_count": 16,
+  "manual_dispatch_only": true,
+  "decision_rule": {
+    "max_candidate_harm": 0,
+    "required_partial_passes": 4,
+    "minimum_noop_passes": 3,
+    "minimum_noop_candidate_gains": 1,
+    "no_gain_with_other_thresholds_met": "selection_inconclusive",
+    "comparable_failure": "selection_fail"
+  },
+  "stopping_rule": {
+    "first_complete_comparable_run_is_decision_bearing": true,
+    "behavioral_failure_may_be_retried": false,
+    "infrastructure_invalid_seed_is_burned": true,
+    "replacement_only_for_infrastructure_invalidity": true
+  },
+  "maximum_infrastructure_replacements": 1,
+  "constraints": [
+    "Do not edit verified-delta/SKILL.md during selection validation.",
+    "Do not edit evals/candidates/r1-target-authority.md after this plan is frozen.",
+    "Exact selected families, fixture parameters, and hidden probes are materialized only after workflow_dispatch begins.",
+    "For each selected family, noop and partial variants use byte-identical task prompt text and differ only in fixture state.",
+    "Use actual attested model, reasoning effort, and tool set for matched-context comparison.",
+    "Treat missing, duplicate, tampered, or matched-context-mismatched receipts as infrastructure-invalid rather than behavioral effects.",
+    "A valid behavioral failure is decision-bearing and must not be rerun to seek a more favorable seed.",
+    "Tool-call and wall-time deltas are descriptive only and are not acceptance thresholds.",
+    "Dispatch is manual-only because one complete selection run performs exactly 16 Copilot trials and may consume premium requests or credits."
+  ]
+}
