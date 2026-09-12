@@ -86,6 +86,42 @@ The metrics file supplied to `record` must contain these four canonical keys:
 
 Each canonical value must be either a non-negative integer or `null` when the external harness genuinely cannot observe it. Additional provider-specific metrics may be retained. Missing canonical keys, negative values, booleans, or stringified numbers are rejected rather than silently normalized.
 
+Every receipt also requires a structured `run-config.json`. It has three roles:
+
+- `matched` — causal context that must be held equal across U0/U1, including prompt language, provider/model/snapshot, harness/version, tools and tool policy, reasoning/sampling controls, and resource limits;
+- `intervention` — delivery-form metadata that is expected to differ by condition (`none` for U0, `force-loaded-skill` for U1), plus metadata/body language, description variant, and available-skill-set hash;
+- `trial` — per-run provenance such as clean-environment ID, trial ID, and UTC timestamp.
+
+Example shape:
+
+```json
+{
+  "schema_version": 1,
+  "matched": {
+    "prompt_language": "en",
+    "model": {"provider": "provider", "id": "model", "snapshot": "snapshot"},
+    "harness": {"id": "runner", "version": "1.0.0"},
+    "tool_set": ["python", "shell"],
+    "tool_policy": {"workspace_only": true},
+    "reasoning_effort": "high",
+    "sampling_controls": {"temperature": 0},
+    "limits": {"wall_time_ms": 60000, "max_output_tokens": 4000}
+  },
+  "intervention": {
+    "delivery_form": "none",
+    "metadata_language": null,
+    "body_language": null,
+    "description_variant": null,
+    "available_skill_set_sha256": null
+  },
+  "trial": {
+    "clean_environment_id": "clean-u0-r1",
+    "trial_id": "noop-pair-u0-r1",
+    "timestamp_utc": "2026-09-12T05:00:00Z"
+  }
+}
+```
+
 Then record an immutable trial receipt:
 
 ```bash
@@ -96,14 +132,15 @@ python eval_harness.py record \
   --condition U0 \
   --pair-id noop-pair \
   --replicate 1 \
-  --model-id MODEL_SNAPSHOT \
-  --harness-id HARNESS_VERSION \
+  --model-id MODEL_ID \
+  --harness-id HARNESS_ID \
   --transcript transcript.txt \
   --metrics metrics.json \
+  --run-config run-config.json \
   --json
 ```
 
-`pair-id`, `model-id`, and `harness-id` must be non-empty, and `replicate` starts at 1. A receipt binds the individual result to its grader output, workspace hash, transcript hash, metrics, condition, model/harness identity, exact evaluator/fixture/grader/manifest digests, and — for `U1` — the SHA-256 of the runtime skill. Existing receipt paths are never overwritten. Keep every replicate, including failures.
+`pair-id`, `model-id`, and `harness-id` must be non-empty, and `replicate` starts at 1. `record` validates the run-config schema, cross-checks model/harness identity and delivery form against the receipt condition, and binds both a canonical full-config SHA-256 and a separate `matched` SHA-256. A receipt also binds grader output, final workspace hash, transcript hash, metrics, condition, exact evaluator/fixture/grader/manifest digests, and — for `U1` — the SHA-256 of the runtime skill. Existing receipt paths are never overwritten.
 
 ### Summarize without averaging away harm
 
@@ -120,9 +157,9 @@ The summary groups by `case_id + pair_id`, preserves each replicate, and classif
 - `same_pass`: both pass;
 - `same_fail`: both fail.
 
-It deliberately does **not** emit one global score. A replicate becomes `not_comparable` instead of a treatment effect when U0/U1 is missing, when model identity, harness identity, or evaluator provenance differs, or when duplicate receipts claim the same condition and replicate. This prevents input ordering or mismatched configurations from manufacturing a gain/harm result.
+It deliberately does **not** emit one global score. Missing or tampered run-config evidence is rejected. Two internally valid receipts whose matched causal context differs are `not_comparable`, as are missing conditions, evaluator-provenance mismatches, and duplicate receipts for the same condition/replicate. This prevents input ordering or configuration drift from manufacturing a treatment effect.
 
-The clean U0/U1 execution itself remains an external evidence boundary until a genuinely fresh model/agent harness performs it. The runner must still preserve the matched external tool policy, budgets, reasoning/sampling configuration where applicable, and any other causal configuration required by `EVALS.md`; a receipt does not excuse an invalid experimental setup.
+The clean U0/U1 execution itself remains an external evidence boundary until a genuinely fresh model/agent harness performs it. A hardened receipt proves what was recorded; it does **not** prove that an external model invocation or skill injection actually occurred as claimed. Preserve transcripts and independent runner evidence.
 
 ## Development Rule
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta
 import hashlib
 import json
 import pathlib
@@ -46,6 +47,134 @@ def sha256_tree(root: pathlib.Path) -> str:
         digest.update(content_digest)
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def canonical_sha256(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def require_nonempty_string(value: object, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"run config {field} must be a non-empty string")
+    return value
+
+
+def require_object(value: object, field: str) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError(f"run config {field} must be a JSON object")
+    return value
+
+
+def validate_optional_sha256(value: object, field: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, str) or len(value) != 64:
+        raise ValueError(f"run config {field} must be null or a 64-character SHA-256")
+    try:
+        int(value, 16)
+    except ValueError as exc:
+        raise ValueError(f"run config {field} must be null or a hexadecimal SHA-256") from exc
+
+
+def validate_nullable_string(value: object, field: str) -> None:
+    if value is None:
+        return
+    require_nonempty_string(value, field)
+
+
+def validate_run_config(value: object) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError("run config must be a JSON object")
+    if value.get("schema_version") != 1:
+        raise ValueError("run config schema_version must be 1")
+
+    matched = require_object(value.get("matched"), "matched")
+    require_nonempty_string(matched.get("prompt_language"), "matched.prompt_language")
+
+    model = require_object(matched.get("model"), "matched.model")
+    for field in ("provider", "id", "snapshot"):
+        require_nonempty_string(model.get(field), f"matched.model.{field}")
+
+    harness = require_object(matched.get("harness"), "matched.harness")
+    for field in ("id", "version"):
+        require_nonempty_string(harness.get(field), f"matched.harness.{field}")
+
+    tool_set = matched.get("tool_set")
+    if not isinstance(tool_set, list):
+        raise ValueError("run config matched.tool_set must be a JSON array")
+    normalized_tools = []
+    for index, tool in enumerate(tool_set):
+        normalized_tools.append(
+            require_nonempty_string(tool, f"matched.tool_set[{index}]")
+        )
+    if len(set(normalized_tools)) != len(normalized_tools):
+        raise ValueError("run config matched.tool_set must not contain duplicates")
+
+    require_object(matched.get("tool_policy"), "matched.tool_policy")
+    validate_nullable_string(matched.get("reasoning_effort"), "matched.reasoning_effort")
+    sampling_controls = matched.get("sampling_controls")
+    if sampling_controls is not None:
+        require_object(sampling_controls, "matched.sampling_controls")
+    require_object(matched.get("limits"), "matched.limits")
+
+    intervention = require_object(value.get("intervention"), "intervention")
+    require_nonempty_string(intervention.get("delivery_form"), "intervention.delivery_form")
+    for field in ("metadata_language", "body_language", "description_variant"):
+        validate_nullable_string(intervention.get(field), f"intervention.{field}")
+    validate_optional_sha256(
+        intervention.get("available_skill_set_sha256"),
+        "intervention.available_skill_set_sha256",
+    )
+
+    trial = require_object(value.get("trial"), "trial")
+    require_nonempty_string(trial.get("clean_environment_id"), "trial.clean_environment_id")
+    require_nonempty_string(trial.get("trial_id"), "trial.trial_id")
+    timestamp = require_nonempty_string(trial.get("timestamp_utc"), "trial.timestamp_utc")
+    try:
+        parsed_timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("run config trial.timestamp_utc must be an ISO-8601 timestamp") from exc
+    if parsed_timestamp.tzinfo is None or parsed_timestamp.utcoffset() != timedelta(0):
+        raise ValueError("run config trial.timestamp_utc must include a UTC offset")
+
+    return value
+
+
+def load_run_config(path: pathlib.Path) -> dict:
+    if not path.is_file():
+        raise FileNotFoundError(f"run config does not exist: {path}")
+    value = validate_run_config(json.loads(path.read_text(encoding="utf-8")))
+    matched = value["matched"]
+    return {
+        "value": value,
+        "sha256": canonical_sha256(value),
+        "matched_sha256": canonical_sha256(matched),
+    }
+
+
+def validate_run_config_binding(
+    run_config: dict,
+    condition: str,
+    model_id: str,
+    harness_id: str,
+) -> None:
+    value = run_config["value"]
+    matched = value["matched"]
+    if matched["model"]["id"] != model_id:
+        raise ValueError("run config matched.model.id does not match --model-id")
+    if matched["harness"]["id"] != harness_id:
+        raise ValueError("run config matched.harness.id does not match --harness-id")
+    expected_delivery = "none" if condition == "U0" else "force-loaded-skill"
+    if value["intervention"]["delivery_form"] != expected_delivery:
+        raise ValueError(
+            f"run config intervention.delivery_form must be {expected_delivery!r} for {condition}"
+        )
 
 
 def validate_metrics(metrics: object) -> dict:
@@ -102,6 +231,26 @@ def load_receipt(path: pathlib.Path) -> dict:
     provenance = payload.get("eval_provenance")
     if not isinstance(provenance, dict):
         raise ValueError(f"invalid receipt eval_provenance in {path}")
+
+    if "run_config" not in payload:
+        raise ValueError(f"receipt missing run config: {path}")
+    run_config = payload["run_config"]
+    if not isinstance(run_config, dict):
+        raise ValueError(f"invalid receipt run config in {path}")
+    value = validate_run_config(run_config.get("value"))
+    expected_sha256 = canonical_sha256(value)
+    expected_matched_sha256 = canonical_sha256(value["matched"])
+    if run_config.get("sha256") != expected_sha256:
+        raise ValueError(f"run config SHA-256 mismatch in receipt: {path}")
+    if run_config.get("matched_sha256") != expected_matched_sha256:
+        raise ValueError(f"run config matched SHA-256 mismatch in receipt: {path}")
+    validated_run_config = {
+        "value": value,
+        "sha256": expected_sha256,
+        "matched_sha256": expected_matched_sha256,
+    }
+    validate_run_config_binding(validated_run_config, condition, model_id, harness_id)
+    payload["run_config"] = validated_run_config
     return payload
 
 
@@ -120,6 +269,14 @@ def paired_config_issues(replicate: int, u0: dict, u1: dict) -> list[str]:
     for field in ("model_id", "harness_id", "eval_provenance"):
         if u0[field] != u1[field]:
             issues.append(f"replicate {replicate} {field} mismatch")
+    u0_run_config = u0.get("run_config")
+    u1_run_config = u1.get("run_config")
+    if (u0_run_config is None) != (u1_run_config is None):
+        issues.append(f"replicate {replicate} matched run config mismatch")
+    elif u0_run_config is not None and (
+        u0_run_config.get("matched_sha256") != u1_run_config.get("matched_sha256")
+    ):
+        issues.append(f"replicate {replicate} matched run config mismatch")
     return issues
 
 
@@ -202,6 +359,7 @@ def command_record(
     harness_id: str,
     transcript_path: pathlib.Path,
     metrics_path: pathlib.Path,
+    run_config_path: pathlib.Path,
     as_json: bool,
 ) -> int:
     find_case(case_id)
@@ -223,6 +381,8 @@ def command_record(
         raise ValueError(f"unsupported condition: {condition}")
 
     metrics = validate_metrics(json.loads(metrics_path.read_text(encoding="utf-8")))
+    run_config = load_run_config(run_config_path)
+    validate_run_config_binding(run_config, condition, model_id, harness_id)
     case_root = CASES / case_id
     eval_provenance = {
         "harness_sha256": sha256_file(HARNESS),
@@ -250,6 +410,7 @@ def command_record(
         },
         "metrics": metrics,
         "grade": grade,
+        "run_config": run_config,
     }
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(
@@ -376,6 +537,7 @@ def build_parser() -> argparse.ArgumentParser:
     record_parser.add_argument("--harness-id", required=True)
     record_parser.add_argument("--transcript", required=True, type=pathlib.Path)
     record_parser.add_argument("--metrics", required=True, type=pathlib.Path)
+    record_parser.add_argument("--run-config", required=True, type=pathlib.Path)
     record_parser.add_argument("--json", action="store_true", dest="as_json")
 
     summarize_parser = subparsers.add_parser(
@@ -408,6 +570,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.harness_id,
                 args.transcript,
                 args.metrics,
+                args.run_config,
                 args.as_json,
             )
         if args.command == "summarize":

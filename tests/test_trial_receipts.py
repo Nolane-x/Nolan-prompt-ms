@@ -23,6 +23,50 @@ def tree_sha256(root: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
+def write_run_config(
+    path: pathlib.Path,
+    condition: str,
+    replicate: int,
+    model_id: str = "fresh-model",
+    harness_id: str = "isolated-harness",
+) -> pathlib.Path:
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "matched": {
+                    "prompt_language": "en",
+                    "model": {
+                        "provider": "test-provider",
+                        "id": model_id,
+                        "snapshot": "snapshot-2026-09-12",
+                    },
+                    "harness": {"id": harness_id, "version": "1.0.0"},
+                    "tool_set": ["python", "shell"],
+                    "tool_policy": {"workspace_only": True},
+                    "reasoning_effort": "high",
+                    "sampling_controls": {"temperature": 0},
+                    "limits": {"wall_time_ms": 60000, "max_output_tokens": 4000},
+                },
+                "intervention": {
+                    "delivery_form": "none" if condition == "U0" else "force-loaded-skill",
+                    "metadata_language": None if condition == "U0" else "en",
+                    "body_language": None if condition == "U0" else "en",
+                    "description_variant": None if condition == "U0" else "current",
+                    "available_skill_set_sha256": None,
+                },
+                "trial": {
+                    "clean_environment_id": f"clean-{condition.lower()}-{replicate}",
+                    "trial_id": f"pair-a-{condition.lower()}-{replicate}",
+                    "timestamp_utc": "2026-09-12T04:20:00Z",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 class TrialReceiptTests(unittest.TestCase):
     def run_harness(self, *args: str):
         return subprocess.run(
@@ -47,6 +91,11 @@ class TrialReceiptTests(unittest.TestCase):
         condition: str = "U0",
         replicate: int = 1,
     ) -> tuple[str, ...]:
+        run_config = write_run_config(
+            receipt.with_suffix(".run-config.json"),
+            condition,
+            replicate,
+        )
         return (
             "record",
             case_id,
@@ -66,6 +115,8 @@ class TrialReceiptTests(unittest.TestCase):
             str(transcript),
             "--metrics",
             str(metrics),
+            "--run-config",
+            str(run_config),
             "--json",
         )
 
