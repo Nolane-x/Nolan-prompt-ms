@@ -18,6 +18,13 @@ CANDIDATE = ROOT / "evals" / "candidates" / "r1-target-authority.md"
 EXPERIMENT = "target-authority-ablation-v1"
 ARMS = ("R1", "R1A")
 EFFECT_NAMES = ("same_fail", "same_pass", "candidate_gain", "candidate_harm")
+PROVENANCE_FIELDS = {
+    "semantic_ablation_sha256",
+    "eval_harness_sha256",
+    "manifest_sha256",
+    "fixture_sha256",
+    "grader_sha256",
+}
 
 
 def treatment_path(arm: str) -> pathlib.Path:
@@ -36,8 +43,19 @@ def treatment_set_sha256() -> str:
     return base.canonical_sha256(treatment_sha256s())
 
 
-def expected_intervention(arm: str) -> dict[str, object]:
-    loaded_sha = base.sha256_file(treatment_path(arm))
+def validate_sha256(value: object, label: str) -> str:
+    if not isinstance(value, str) or len(value) != 64:
+        raise ValueError(f"{label} must be a SHA-256 hex digest")
+    if any(char not in "0123456789abcdef" for char in value):
+        raise ValueError(f"{label} must be a lowercase SHA-256 hex digest")
+    return value
+
+
+def expected_intervention(arm: str, loaded_sha256: str | None = None) -> dict[str, object]:
+    if arm not in ARMS:
+        raise ValueError(f"unsupported ablation arm: {arm}")
+    loaded_sha = loaded_sha256 or base.sha256_file(treatment_path(arm))
+    validate_sha256(loaded_sha, f"{arm} treatment SHA-256")
     return {
         "delivery_form": "force-loaded-incumbent" if arm == "R1" else "force-loaded-candidate",
         "metadata_language": "en",
@@ -47,14 +65,21 @@ def expected_intervention(arm: str) -> dict[str, object]:
     }
 
 
-def validate_run_config_binding(run_config: dict, arm: str, model_id: str, harness_id: str) -> None:
+def validate_run_config_binding(
+    run_config: dict,
+    arm: str,
+    model_id: str,
+    harness_id: str,
+    *,
+    loaded_sha256: str | None = None,
+) -> None:
     value = run_config["value"]
     matched = value["matched"]
     if matched["model"]["id"] != model_id:
         raise ValueError("run config matched.model.id does not match --model-id")
     if matched["harness"]["id"] != harness_id:
         raise ValueError("run config matched.harness.id does not match --harness-id")
-    expected = expected_intervention(arm)
+    expected = expected_intervention(arm, loaded_sha256)
     if value["intervention"] != expected:
         raise ValueError(f"run config intervention does not match {arm} treatment")
 
@@ -67,6 +92,38 @@ def eval_provenance(case_id: str) -> dict[str, str]:
         "manifest_sha256": base.sha256_file(base.MANIFEST),
         "fixture_sha256": base.sha256_tree(case_root / "fixture"),
         "grader_sha256": base.sha256_file(case_root / "grader.py"),
+    }
+
+
+def validate_recorded_provenance(value: object, path: pathlib.Path) -> dict[str, str]:
+    if not isinstance(value, dict) or set(value) != PROVENANCE_FIELDS:
+        raise ValueError(f"invalid eval provenance in {path}")
+    normalized = {}
+    for field in sorted(PROVENANCE_FIELDS):
+        normalized[field] = validate_sha256(value[field], f"eval provenance {field}")
+    return normalized
+
+
+def validate_recorded_treatment(value: object, arm: str, path: pathlib.Path) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError(f"invalid treatment provenance in {path}")
+    member_shas = value.get("treatment_sha256s")
+    if not isinstance(member_shas, dict) or set(member_shas) != set(ARMS):
+        raise ValueError(f"invalid treatment-set members in {path}")
+    normalized_members = {
+        member: validate_sha256(member_shas[member], f"{member} recorded treatment SHA-256")
+        for member in ARMS
+    }
+    loaded_sha = validate_sha256(value.get("loaded_sha256"), "loaded treatment SHA-256")
+    if loaded_sha != normalized_members[arm]:
+        raise ValueError(f"loaded treatment SHA-256 does not match recorded {arm} member in {path}")
+    set_sha = validate_sha256(value.get("treatment_set_sha256"), "treatment-set SHA-256")
+    if set_sha != base.canonical_sha256(normalized_members):
+        raise ValueError(f"treatment-set SHA-256 mismatch in {path}")
+    return {
+        "loaded_sha256": loaded_sha,
+        "treatment_sha256s": normalized_members,
+        "treatment_set_sha256": set_sha,
     }
 
 
@@ -167,19 +224,8 @@ def load_receipt(path: pathlib.Path) -> dict:
     grade = payload.get("grade")
     if not isinstance(grade, dict) or not isinstance(grade.get("passed"), bool):
         raise ValueError(f"invalid receipt grade in {path}")
-    if payload.get("eval_provenance") != eval_provenance(case_id):
-        raise ValueError(f"eval provenance mismatch in {path}")
-
-    treatment = payload.get("treatment")
-    expected_shas = treatment_sha256s()
-    if not isinstance(treatment, dict):
-        raise ValueError(f"invalid treatment provenance in {path}")
-    if treatment.get("loaded_sha256") != expected_shas[arm]:
-        raise ValueError(f"loaded treatment SHA-256 mismatch in {path}")
-    if treatment.get("treatment_sha256s") != expected_shas:
-        raise ValueError(f"treatment-set members mismatch in {path}")
-    if treatment.get("treatment_set_sha256") != treatment_set_sha256():
-        raise ValueError(f"treatment-set SHA-256 mismatch in {path}")
+    payload["eval_provenance"] = validate_recorded_provenance(payload.get("eval_provenance"), path)
+    payload["treatment"] = validate_recorded_treatment(payload.get("treatment"), arm, path)
 
     run_config_raw = payload.get("run_config")
     if not isinstance(run_config_raw, dict):
@@ -194,7 +240,13 @@ def load_receipt(path: pathlib.Path) -> dict:
         raise ValueError(f"run config SHA-256 mismatch in receipt: {path}")
     if run_config_raw.get("matched_sha256") != run_config["matched_sha256"]:
         raise ValueError(f"run config matched SHA-256 mismatch in receipt: {path}")
-    validate_run_config_binding(run_config, arm, model_id, harness_id)
+    validate_run_config_binding(
+        run_config,
+        arm,
+        model_id,
+        harness_id,
+        loaded_sha256=payload["treatment"]["loaded_sha256"],
+    )
     payload["run_config"] = run_config
     return payload
 
