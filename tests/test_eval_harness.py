@@ -10,6 +10,44 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "eval_harness.py"
 
 
+def write_run_config(path: pathlib.Path, condition: str = "U0") -> pathlib.Path:
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "matched": {
+                    "prompt_language": "en",
+                    "model": {
+                        "provider": "test-provider",
+                        "id": "fresh-model",
+                        "snapshot": "snapshot-2026-09-12",
+                    },
+                    "harness": {"id": "isolated-harness", "version": "1.0.0"},
+                    "tool_set": ["python", "shell"],
+                    "tool_policy": {"workspace_only": True},
+                    "reasoning_effort": "high",
+                    "sampling_controls": {"temperature": 0},
+                    "limits": {"wall_time_ms": 60000, "max_output_tokens": 4000},
+                },
+                "intervention": {
+                    "delivery_form": "none" if condition == "U0" else "force-loaded-skill",
+                    "metadata_language": None if condition == "U0" else "en",
+                    "body_language": None if condition == "U0" else "en",
+                    "description_variant": None if condition == "U0" else "current",
+                    "available_skill_set_sha256": None,
+                },
+                "trial": {
+                    "clean_environment_id": "clean-env-u0-r1",
+                    "trial_id": "noop-pair-u0-r1",
+                    "timestamp_utc": "2026-09-12T04:20:00Z",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 class EvalHarnessTests(unittest.TestCase):
     def run_harness(self, *args: str):
         return subprocess.run(
@@ -213,6 +251,7 @@ class EvalHarnessTests(unittest.TestCase):
                 "wall_time_ms": 900,
             }
             metrics.write_text(json.dumps(metrics_payload), encoding="utf-8")
+            run_config = write_run_config(root / "run-config.json")
             receipt = root / "receipt.json"
 
             result = self.run_harness(
@@ -234,6 +273,8 @@ class EvalHarnessTests(unittest.TestCase):
                 str(transcript),
                 "--metrics",
                 str(metrics),
+                "--run-config",
+                str(run_config),
                 "--json",
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -247,6 +288,7 @@ class EvalHarnessTests(unittest.TestCase):
             self.assertEqual(payload["model_id"], "fresh-model")
             self.assertEqual(payload["harness_id"], "isolated-harness")
             self.assertEqual(payload["skill"], {"loaded": False, "sha256": None})
+            self.assertIn("run_config", payload)
             self.assertTrue(payload["grade"]["passed"])
             self.assertEqual(payload["metrics"], metrics_payload)
             self.assertEqual(
