@@ -76,6 +76,17 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
         self.assertIn('--model-id "$ACTUAL_MODEL_ID"', text)
         self.assertNotIn('--model-id "$MODEL_ID"', text)
 
+    def test_auto_uses_default_reasoning_without_lying_in_run_config(self):
+        text = self.workflow_text()
+        self.assertIn("default: default", text)
+        self.assertIn("- default", text)
+        self.assertIn('if [ "$MODEL_INPUT" = "auto" ] && [ "$REASONING_INPUT" != "default" ]; then', text)
+        self.assertIn('REASONING_ARGS=()', text)
+        self.assertIn('if [ "$REASONING_EFFORT" != "default" ]; then', text)
+        self.assertIn('REASONING_ARGS+=("--reasoning-effort=$REASONING_EFFORT")', text)
+        self.assertIn('"${REASONING_ARGS[@]}"', text)
+        self.assertIn('reasoning_effort = None if reasoning_effort_input == "default" else reasoning_effort_input', text)
+
 
 if __name__ == "__main__":
     unittest.main()
