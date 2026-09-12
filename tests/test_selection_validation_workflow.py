@@ -10,15 +10,15 @@ class TargetAuthoritySelectionWorkflowTests(unittest.TestCase):
         self.assertTrue(WORKFLOW.is_file(), "selection-validation workflow must exist")
         return WORKFLOW.read_text(encoding="utf-8")
 
-    def test_workflow_is_manual_with_named_model_and_no_external_seed_input(self):
+    def test_workflow_is_manual_with_supported_auto_default_and_no_external_seed_input(self):
         text = self.workflow_text()
         self.assertIn("workflow_dispatch:", text)
         self.assertNotIn("execution_seed:", text)
         self.assertNotIn("EXECUTION_SEED: ${{ inputs.execution_seed }}", text)
         self.assertNotIn("\n  push:", text)
         self.assertNotIn("\n  pull_request:", text)
-        self.assertIn("default: gpt-5.4", text)
-        self.assertIn("default: medium", text)
+        self.assertIn("default: auto", text)
+        self.assertIn("default: default", text)
 
     def test_model_preflight_finishes_before_hidden_bundle_generation(self):
         text = self.workflow_text()
