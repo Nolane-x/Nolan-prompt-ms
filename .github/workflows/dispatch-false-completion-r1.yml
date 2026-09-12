@@ -23,6 +23,6 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
             -f case_id=false-completion-state \
-            -f model=gpt-5.4 \
+            -f model=claude-sonnet-4.6 \
             -f reasoning_effort=high \
             -f replicate=1
