@@ -17,11 +17,12 @@ on:
         default: auto
         type: string
       reasoning_effort:
-        description: Reasoning effort
+        description: Reasoning effort, or default to omit the flag
         required: true
-        default: high
+        default: default
         type: choice
         options:
+          - default
           - low
           - medium
           - high
@@ -41,6 +42,7 @@ jobs:
     env:
       REPLICATE_INPUT: ${{ inputs.replicate }}
       MODEL_INPUT: ${{ inputs.model }}
+      REASONING_INPUT: ${{ inputs.reasoning_effort }}
     steps:
       - name: Validate dispatch inputs before any Copilot trial
         shell: bash
@@ -48,6 +50,10 @@ jobs:
           set -euo pipefail
           [[ "$REPLICATE_INPUT" =~ ^[1-9][0-9]*$ ]]
           [[ -n "${MODEL_INPUT//[[:space:]]/}" ]]
+          if [ "$MODEL_INPUT" = "auto" ] && [ "$REASONING_INPUT" != "default" ]; then
+            echo "Auto model selection does not accept an explicit reasoning-effort flag in this harness." >&2
+            exit 1
+          fi
 
   resolve:
     needs: validate
@@ -137,13 +143,18 @@ jobs:
           export COPILOT_HOME="$RUNNER_TEMP/copilot-home-$CONDITION"
           mkdir -p "$COPILOT_HOME"
 
+          REASONING_ARGS=()
+          if [ "$REASONING_EFFORT" != "default" ]; then
+            REASONING_ARGS+=("--reasoning-effort=$REASONING_EFFORT")
+          fi
+
           start_ms=$(date +%s%3N)
           set +e
           copilot \
             -C "$WORKSPACE" \
             --prompt="$(cat "$TRIAL_ROOT/prompt.txt")" \
             --model="$MODEL_ID" \
-            --reasoning-effort="$REASONING_EFFORT" \
+            "${REASONING_ARGS[@]}" \
             --output-format=json \
             --available-tools='bash,apply_patch,create,edit,view,glob,grep' \
             --allow-tool='write,shell(python:*)' \
@@ -250,7 +261,7 @@ jobs:
               condition,
               actual_model_id,
               requested_model_id,
-              reasoning_effort,
+              reasoning_effort_input,
               copilot_version,
               harness_id,
               run_id,
@@ -260,6 +271,7 @@ jobs:
           ) = sys.argv[1:]
 
           is_u1 = condition == "U1"
+          reasoning_effort = None if reasoning_effort_input == "default" else reasoning_effort_input
           payload = {
               "schema_version": 1,
               "matched": {
