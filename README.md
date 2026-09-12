@@ -18,10 +18,13 @@ Nolane Prompt MS takes the opposite approach: compress research into a small ker
 |---|---|
 | `verified-delta/SKILL.md` | Runtime skill package loaded by an agent |
 | `EVALS.md` | Behavioral gates, pressure scenarios, and scoring contract |
-| `evals/evals.json` | Preregistered executable utility cases |
-| `evals/cases/` | Agent-visible fixtures plus out-of-trial deterministic graders |
+| `evals/evals.json` | Preregistered executable development utility cases |
+| `evals/target-authority-selection-plan.json` | Frozen, machine-readable cross-domain selection-validation contract; contains no final hidden task content |
+| `evals/cases/` | Agent-visible development fixtures plus out-of-trial deterministic graders |
 | `eval_harness.py` | Lists, prepares, grades, records, and summarizes U0/U1 trials; Python stdlib only |
+| `semantic_ablation.py` | Records and summarizes matched R1/R1A semantic-ablation trials |
 | `.github/workflows/behavioral-u0-u1.yml` | Manual-only fresh U0/U1 runner using GitHub Copilot CLI |
+| `.github/workflows/semantic-ablation.yml` | Manual-only R1/R1A development ablation runner |
 | `CONSTITUTION.md` | Laws for editing, compressing, and validating the skill |
 | `STATE.md` | Minimal cross-session boot state and open research debt |
 | `verify.py` | Deterministic repository invariant checker; Python stdlib only |
@@ -34,15 +37,17 @@ No source document is copied into runtime context. Research is distilled only wh
 
 **Alpha. Behavioral verification is still open.**
 
-The runtime kernel remains 446 words with no runtime dependencies, model profiles, or tool-specific templates. It is packaged under `verified-delta/` so the skill name and parent directory agree. A deterministic verification layer guards mechanical invariants, and the repository contains an executable three-case U0/U1 development lab.
+The runtime kernel remains **446 words**, has no runtime dependencies, and remains git blob `ac48f09ab02eca63e014b4c25f86e492ae5559cb`. It has not been edited by the evaluation work described below.
 
-A manual fresh-runner workflow now exists, but **no behavioral trial has been dispatched yet**. Merging or pushing the workflow does not invoke Copilot. A manual dispatch can consume GitHub Copilot requests/credits and requires an account/repository policy that permits Copilot CLI in Actions.
+Behavioral experiments have now run. The first three-case U0/U1 development set found no measured functional gain for current runtime R1 over no guidance and exposed an intermittent no-op target-widening failure. A frozen R1A candidate — exact R1 plus one target-authority sentence — subsequently passed its preregistered three-replicate development-stability rule on the opposing normalization pair. That is **development evidence only**, not runtime residency or general proof.
 
-Do not describe this version as proven, best, converged, or behaviorally verified.
+The next boundary is preregistered in `evals/target-authority-selection-plan.json`: six cross-domain semantic cells, two paired replicates per cell, and a fixed budget of 24 model trials. The contract freezes R1/R1A identities, comparability dimensions, contamination rules, stopping rules, and the pass/fail rule while deliberately omitting final hidden prompts, fixture values, and expected answers. Those final instances have **not** been generated or executed yet.
+
+Do not describe this version as proven, best, converged, behaviorally verified, cross-domain validated, or runtime-ready.
 
 ## Executable Utility Lab
 
-The first development pack intentionally stays small and opposing:
+The original development pack intentionally stays small and opposing:
 
 - `username-normalization-noop`: the reported bug is already fixed; unnecessary production change fails.
 - `username-normalization-partial`: the same report hides a remaining defect; passivity fails and a focused production change is required.
@@ -50,7 +55,7 @@ The first development pack intentionally stays small and opposing:
 
 ### Orchestrator boundary
 
-Inspect preregistered cases from the **orchestrator/researcher side**:
+Inspect preregistered development cases from the **orchestrator/researcher side**:
 
 ```bash
 python eval_harness.py list --json
@@ -91,29 +96,11 @@ Each canonical value is either a non-negative integer or `null` when the externa
 
 Every receipt also requires a structured `run-config.json` with three roles:
 
-- `matched` — causal context held equal across U0/U1: prompt language, provider/model/snapshot, harness/version, tools and tool policy, reasoning/sampling controls, and resource limits;
-- `intervention` — delivery metadata expected to differ by condition (`none` for U0, `force-loaded-skill` for U1), plus metadata/body language, description variant, and available-skill-set hash;
+- `matched` — causal context held equal across paired arms: prompt language, provider/model/snapshot, harness/version, tools and tool policy, reasoning/sampling controls, and resource limits;
+- `intervention` — delivery metadata expected to differ by condition, plus metadata/body language, description variant, and available-skill-set hash;
 - `trial` — per-run provenance such as clean-environment ID, trial ID, and UTC timestamp.
 
-Then record an immutable trial receipt:
-
-```bash
-python eval_harness.py record \
-  username-normalization-noop \
-  /tmp/vd-u0-r1 \
-  results/noop-pair-u0-r1.json \
-  --condition U0 \
-  --pair-id noop-pair \
-  --replicate 1 \
-  --model-id MODEL_ID \
-  --harness-id HARNESS_ID \
-  --transcript transcript.txt \
-  --metrics metrics.json \
-  --run-config run-config.json \
-  --json
-```
-
-`record` validates the run-config schema, cross-checks model/harness identity and delivery form against the receipt condition, and binds both a canonical full-config SHA-256 and a separate `matched` SHA-256. A receipt also binds grader output, final workspace hash, transcript hash, metrics, condition, exact evaluator/fixture/grader/manifest digests, and — for `U1` — the SHA-256 of the runtime skill. Existing receipt paths are never overwritten.
+Then record an immutable trial receipt. `record` validates the run-config schema, cross-checks model/harness identity and delivery form against the receipt condition, and binds both a canonical full-config SHA-256 and a separate `matched` SHA-256. A receipt also binds grader output, final workspace hash, transcript hash, metrics, condition, exact evaluator/fixture/grader/manifest digests, and treatment identity. Existing receipt paths are never overwritten.
 
 ### Summarize without averaging away harm
 
@@ -121,52 +108,45 @@ python eval_harness.py record \
 python eval_harness.py summarize results/*.json --json
 ```
 
-The summary groups by `case_id + pair_id`, preserves each replicate, and classifies a matched replicate as one of:
+The U0/U1 summary preserves each replicate and classifies a matched replicate as one of:
 
 - `u1_gain`: U0 fails and U1 passes;
 - `u1_harm`: U0 passes and U1 fails;
 - `same_pass`: both pass;
 - `same_fail`: both fail.
 
-It deliberately emits no global score. Missing or tampered run-config evidence is rejected. Two individually valid receipts whose matched causal context differs are `not_comparable`, as are missing conditions, evaluator-provenance mismatches, and duplicate receipts for the same condition/replicate.
+The R1/R1A semantic-ablation summary analogously uses `candidate_gain`, `candidate_harm`, `same_pass`, and `same_fail`. Missing or tampered run-config evidence is rejected. Individually valid receipts whose matched causal context differs are `not_comparable`; minority failures are never averaged away.
 
-## Manual Fresh U0/U1 Runner
+## Manual Fresh Runners
 
-`.github/workflows/behavioral-u0-u1.yml` is a **manual `workflow_dispatch` workflow only**. It never runs on push or pull request.
+The Copilot behavioral workflows are **manual `workflow_dispatch` workflows only**. Normal push/PR CI does not invoke model trials.
 
-Before any model call it validates the replicate/model inputs and resolves one Copilot CLI package version for the whole pair. U0 and U1 then run as separate GitHub-hosted jobs with clean `$RUNNER_TEMP` workspaces and separate `COPILOT_HOME` directories. Both install the exact same resolved CLI version, model name, reasoning effort, tool set, tool policy, and time budget.
+Before model calls, the runners validate inputs and resolve one Copilot CLI package version for the pair. Paired arms run as separate GitHub-hosted jobs with clean `$RUNNER_TEMP` workspaces and separate `COPILOT_HOME` directories. They bind the actual provider-routed model, reasoning effort, and observed runtime tool set rather than assuming requested configuration equals runtime reality.
 
-The treatment difference is intentionally narrow:
-
-- **U0** receives only the task prompt;
-- **U1** receives the exact current `verified-delta/SKILL.md`, followed by the same task prompt.
-
-The runner disables built-in MCPs, custom instructions, remote sessions/export, experimental behavior, interactive questioning, and unrestricted tool approval. It restricts available tools and places the evaluated workspace outside the repository checkout.
-
-Each successful model invocation is converted into the same immutable receipt contract used by the local harness. If Copilot CLI itself exits nonzero, the workflow records an infrastructure error and does **not** create a behavioral receipt. Raw artifacts are retained even on failure. A final job downloads both condition artifacts and runs `eval_harness.py summarize`; missing or non-comparable receipts fail closed while preserving a pair-summary artifact.
+The runners disable built-in MCPs, custom instructions, remote sessions/export, experimental behavior, interactive questioning, and unrestricted tool approval. They preserve raw artifacts even on failure. A nonzero Copilot CLI exit is infrastructure failure, not a behavioral sample.
 
 Important limitations:
 
-- dispatching can consume Copilot requests/credits and is therefore an explicit experimental action, not part of normal CI;
-- the Copilot CLI package version is pinned per pair, but the requested model backend is reported honestly as `provider-managed-unpinned` unless the provider exposes a stronger immutable snapshot identity;
-- token and tool-call counts remain `null` when Copilot CLI does not expose reliable values; they are never estimated;
-- one clean pair is development evidence, not portability, cross-domain, activation, or final holdout evidence.
+- dispatching can consume Copilot requests/credits and is therefore an explicit experimental action, not normal CI;
+- the CLI package version is pinned per pair, but the backend snapshot remains `provider-managed-unpinned` unless the provider exposes stronger immutable identity;
+- token counts remain `null` when the harness cannot observe them reliably; they are never estimated;
+- development stability is not cross-domain validation, portability, activation, or final-holdout evidence.
 
-The current conversation has seen the skill, cases, and graders, so it must not substitute itself for this fresh runner.
+The current conversation has seen the development skill/cases/graders, so it must not substitute itself for a fresh evaluated-agent context.
 
 ## Development Rule
 
-Before changing the skill:
+Before changing runtime behavior:
 
 1. read `CONSTITUTION.md` and `STATE.md`;
 2. inspect current repository reality;
-3. run `python verify.py`;
+3. run the full unit suite and `python verify.py`;
 4. identify one demonstrated behavioral failure;
-5. test a minimal wording change;
+5. test a minimal semantic intervention;
 6. ablate it;
-7. keep it only if behavior worsens without it;
-8. update `STATE.md` and rerun the verifier;
-9. stop.
+7. keep it only if behavior worsens without it under a preregistered comparison;
+8. advance through fresh selection/holdout boundaries without tuning on observed holdout failures;
+9. update `STATE.md`, rerun verification, and stop at the current evidence boundary.
 
 “Research a million times for one word” is treated as a **quality standard**, never as a fabricated iteration count.
 
