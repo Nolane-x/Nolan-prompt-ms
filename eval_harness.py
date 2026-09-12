@@ -17,6 +17,7 @@ MANIFEST = ROOT / "evals" / "evals.json"
 CASES = ROOT / "evals" / "cases"
 SKILL = ROOT / "verified-delta" / "SKILL.md"
 REQUIRED_METRICS = ("input_tokens", "output_tokens", "tool_calls", "wall_time_ms")
+EFFECT_NAMES = ("same_fail", "same_pass", "u1_gain", "u1_harm")
 
 
 def load_manifest() -> dict:
@@ -71,6 +72,44 @@ def validate_trial_identity(pair_id: str, replicate: int, model_id: str, harness
         raise ValueError("trial model_id must be non-empty")
     if not harness_id.strip():
         raise ValueError("trial harness_id must be non-empty")
+
+
+def load_receipt(path: pathlib.Path) -> dict:
+    if not path.is_file():
+        raise FileNotFoundError(f"receipt does not exist: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise ValueError(f"unsupported receipt schema: {path}")
+    condition = payload.get("condition")
+    if condition not in ("U0", "U1"):
+        raise ValueError(f"invalid receipt condition in {path}")
+    case_id = payload.get("case_id")
+    pair_id = payload.get("pair_id")
+    replicate = payload.get("replicate")
+    model_id = payload.get("model_id")
+    harness_id = payload.get("harness_id")
+    if not isinstance(case_id, str) or not case_id.strip():
+        raise ValueError(f"invalid receipt case_id in {path}")
+    if not isinstance(pair_id, str) or not isinstance(replicate, int):
+        raise ValueError(f"invalid receipt trial identity in {path}")
+    if not isinstance(model_id, str) or not isinstance(harness_id, str):
+        raise ValueError(f"invalid receipt trial identity in {path}")
+    validate_trial_identity(pair_id, replicate, model_id, harness_id)
+    validate_metrics(payload.get("metrics"))
+    grade = payload.get("grade")
+    if not isinstance(grade, dict) or not isinstance(grade.get("passed"), bool):
+        raise ValueError(f"invalid receipt grade in {path}")
+    return payload
+
+
+def classify_effect(u0_passed: bool, u1_passed: bool) -> str:
+    if u0_passed and u1_passed:
+        return "same_pass"
+    if not u0_passed and not u1_passed:
+        return "same_fail"
+    if not u0_passed and u1_passed:
+        return "u1_gain"
+    return "u1_harm"
 
 
 def run_grader(case_id: str, workspace: pathlib.Path) -> dict:
@@ -213,6 +252,74 @@ def command_record(
     return 0
 
 
+def command_summarize(receipt_paths: list[pathlib.Path], as_json: bool) -> int:
+    groups: dict[tuple[str, str], list[dict]] = {}
+    for path in receipt_paths:
+        receipt = load_receipt(path)
+        key = (receipt["case_id"], receipt["pair_id"])
+        groups.setdefault(key, []).append(receipt)
+
+    pairs: list[dict] = []
+    for (case_id, pair_id), receipts in sorted(groups.items()):
+        by_replicate: dict[int, dict[str, dict]] = {}
+        for receipt in receipts:
+            by_replicate.setdefault(receipt["replicate"], {})[receipt["condition"]] = receipt
+
+        issues: list[str] = []
+        replicates: list[dict] = []
+        counts = {name: 0 for name in EFFECT_NAMES}
+        for replicate, conditions in sorted(by_replicate.items()):
+            missing = [condition for condition in ("U0", "U1") if condition not in conditions]
+            if missing:
+                issues.append(f"replicate {replicate} missing {'/'.join(missing)}")
+                effect = "not_comparable"
+            else:
+                effect = classify_effect(
+                    conditions["U0"]["grade"]["passed"],
+                    conditions["U1"]["grade"]["passed"],
+                )
+                counts[effect] += 1
+
+            condition_summary = {
+                condition: {
+                    "passed": receipt["grade"]["passed"],
+                    "metrics": receipt["metrics"],
+                }
+                for condition, receipt in sorted(conditions.items())
+            }
+            replicates.append(
+                {
+                    "replicate": replicate,
+                    "effect": effect,
+                    "conditions": condition_summary,
+                }
+            )
+
+        pairs.append(
+            {
+                "case_id": case_id,
+                "pair_id": pair_id,
+                "comparable": not issues,
+                "issues": issues,
+                "counts": counts,
+                "replicates": replicates,
+            }
+        )
+
+    payload = {"schema_version": 1, "pairs": pairs}
+    if as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True))
+    else:
+        for pair in pairs:
+            status = "COMPARABLE" if pair["comparable"] else "NOT COMPARABLE"
+            print(f"{pair['case_id']} / {pair['pair_id']}: {status}")
+            for replicate in pair["replicates"]:
+                print(f"- replicate {replicate['replicate']}: {replicate['effect']}")
+            for issue in pair["issues"]:
+                print(f"  issue: {issue}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -242,6 +349,13 @@ def build_parser() -> argparse.ArgumentParser:
     record_parser.add_argument("--transcript", required=True, type=pathlib.Path)
     record_parser.add_argument("--metrics", required=True, type=pathlib.Path)
     record_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    summarize_parser = subparsers.add_parser(
+        "summarize",
+        help="summarize paired U0/U1 receipts without collapsing task-level effects",
+    )
+    summarize_parser.add_argument("receipts", nargs="+", type=pathlib.Path)
+    summarize_parser.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -268,6 +382,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.metrics,
                 args.as_json,
             )
+        if args.command == "summarize":
+            return command_summarize(args.receipts, args.as_json)
         raise AssertionError(args.command)
     except (FileExistsError, FileNotFoundError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
