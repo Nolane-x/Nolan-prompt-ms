@@ -47,6 +47,7 @@ def resolve_model(path: pathlib.Path) -> str:
 def attest_runtime(path: pathlib.Path) -> dict:
     model = resolve_model(path)
     efforts = set()
+    tool_sets = set()
     tool_calls = 0
 
     for event in _iter_events(path):
@@ -75,20 +76,39 @@ def attest_runtime(path: pathlib.Path) -> dict:
                 if not isinstance(record, dict) or record.get("model") != model:
                     continue
                 effort = record.get("reasoning_effort")
-                if effort is None:
-                    continue
-                if not isinstance(effort, str) or not effort.strip():
-                    raise ValueError("usage checkpoint contains an invalid reasoning effort")
-                efforts.add(effort.strip())
+                if effort is not None:
+                    if not isinstance(effort, str) or not effort.strip():
+                        raise ValueError("usage checkpoint contains an invalid reasoning effort")
+                    efforts.add(effort.strip())
+
+                tools = record.get("tools")
+                if tools is not None:
+                    if not isinstance(tools, list):
+                        raise ValueError("usage checkpoint tools must be a list")
+                    names = []
+                    for tool in tools:
+                        if not isinstance(tool, dict):
+                            raise ValueError("usage checkpoint tool entry must be an object")
+                        name = tool.get("name")
+                        if not isinstance(name, str) or not name.strip():
+                            raise ValueError("usage checkpoint contains an invalid tool name")
+                        names.append(name.strip())
+                    if len(names) != len(set(names)):
+                        raise ValueError("usage checkpoint tool set contains duplicates")
+                    tool_sets.add(tuple(sorted(names)))
 
     if len(efforts) != 1:
         rendered = ", ".join(sorted(efforts)) or "none"
         raise ValueError(f"expected exactly one actual reasoning effort, observed: {rendered}")
+    if len(tool_sets) != 1:
+        rendered = "; ".join(",".join(tool_set) for tool_set in sorted(tool_sets)) or "none"
+        raise ValueError(f"expected exactly one actual tool set, observed: {rendered}")
 
     return {
         "model": model,
         "reasoning_effort": next(iter(efforts)),
         "tool_calls": tool_calls,
+        "tool_set": list(next(iter(tool_sets))),
     }
 
 
