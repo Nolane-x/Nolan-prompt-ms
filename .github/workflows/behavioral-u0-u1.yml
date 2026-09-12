@@ -34,12 +34,29 @@ on:
 
 permissions:
   contents: read
-  copilot-requests: write
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      copilot_version: ${{ steps.version.outputs.copilot_version }}
+    steps:
+      - id: version
+        name: Resolve one Copilot CLI version for the pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(npm view @github/copilot version)
+          test -n "$version"
+          echo "copilot_version=$version" >> "$GITHUB_OUTPUT"
+
   trial:
+    needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      copilot-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -90,11 +107,11 @@ jobs:
             cp "$TRIAL_ROOT/task-prompt.txt" "$TRIAL_ROOT/prompt.txt"
           fi
 
-      - name: Install Copilot CLI
+      - name: Install pinned Copilot CLI
         shell: bash
         run: |
           set -euo pipefail
-          npm install -g @github/copilot
+          npm install -g "@github/copilot@${{ needs.resolve.outputs.copilot_version }}"
           copilot --version > "$RUNNER_TEMP/vd-trial/copilot-version.txt"
 
       - name: Run isolated Copilot trial
@@ -289,4 +306,99 @@ jobs:
         with:
           name: raw-${{ inputs.case_id }}-${{ matrix.condition }}-r${{ inputs.replicate }}-${{ github.run_id }}
           path: ${{ runner.temp }}/vd-trial
+          if-no-files-found: error
+
+  summarize:
+    if: always()
+    needs: trial
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Initialize pair summary workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pair-artifacts" "$RUNNER_TEMP/pair-summary"
+          echo "summary pending" > "$RUNNER_TEMP/pair-summary/status.txt"
+
+      - name: Download both raw trial artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: raw-${{ inputs.case_id }}-*-r${{ inputs.replicate }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/pair-artifacts
+
+      - name: Summarize matched receipts fail-closed
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          PAIR_ROOT="$RUNNER_TEMP/pair-artifacts"
+          SUMMARY_ROOT="$RUNNER_TEMP/pair-summary"
+          mapfile -t receipts < <(find "$PAIR_ROOT" -type f -name receipt.json 2>/dev/null | sort)
+
+          if [ "${#receipts[@]}" -ne 2 ]; then
+            python - "$SUMMARY_ROOT/summary-unavailable.json" "${#receipts[@]}" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          pathlib.Path(sys.argv[1]).write_text(
+              json.dumps(
+                  {
+                      "kind": "missing_pair_receipts",
+                      "receipt_count": int(sys.argv[2]),
+                  },
+                  indent=2,
+                  sort_keys=True,
+              ) + "\n",
+              encoding="utf-8",
+          )
+          PY
+            echo "Expected exactly two behavioral receipts." >&2
+            exit 1
+          fi
+
+          set +e
+          python eval_harness.py summarize "${receipts[@]}" --json \
+            > "$SUMMARY_ROOT/summary.json" \
+            2> "$SUMMARY_ROOT/summarize.stderr.txt"
+          summary_status=$?
+          set -e
+          if [ "$summary_status" -ne 0 ]; then
+            echo "Receipt summarization failed." >&2
+            exit "$summary_status"
+          fi
+
+          python - "$SUMMARY_ROOT/summary.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          pairs = payload.get("pairs", [])
+          if len(pairs) != 1:
+              raise SystemExit("expected exactly one paired summary")
+          pair = pairs[0]
+          if not pair.get("comparable", False):
+              raise SystemExit("paired receipts are not comparable")
+          if any(item.get("effect") == "not_comparable" for item in pair.get("replicates", [])):
+              raise SystemExit("not_comparable replicate present")
+          PY
+          echo "summary valid" > "$SUMMARY_ROOT/status.txt"
+
+      - name: Preserve pair summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pair-summary-${{ inputs.case_id }}-r${{ inputs.replicate }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/pair-summary
           if-no-files-found: error
