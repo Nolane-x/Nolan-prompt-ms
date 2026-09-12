@@ -47,6 +47,17 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
         self.assertIn('"output_tokens": None', text)
         self.assertIn('"tool_calls": None', text)
 
+    def test_pair_pins_one_cli_version_and_summarizes_both_receipts(self):
+        text = self.workflow_text()
+
+        self.assertIn("npm view @github/copilot version", text)
+        self.assertIn("needs: resolve", text)
+        self.assertIn('@github/copilot@${{ needs.resolve.outputs.copilot_version }}', text)
+        self.assertIn("actions/download-artifact@v4", text)
+        self.assertIn("python eval_harness.py summarize", text)
+        self.assertIn("pair-summary", text)
+        self.assertIn("not_comparable", text)
+
 
 if __name__ == "__main__":
     unittest.main()
