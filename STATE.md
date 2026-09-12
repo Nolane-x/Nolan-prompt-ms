@@ -2,7 +2,7 @@
 
 **Status:** alpha / research-active  
 **Behavioral verification gate:** OPEN  
-**Core runtime word count:** 446  
+**Core skill word count:** 446  
 **Runtime dependencies:** none
 
 ## Boot Sequence
