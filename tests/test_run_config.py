@@ -102,6 +102,10 @@ class RunConfigTests(unittest.TestCase):
         transcript: pathlib.Path,
         metrics: pathlib.Path,
         run_config: pathlib.Path,
+        *,
+        condition: str = "U0",
+        model_id: str = "fresh-model",
+        harness_id: str = "isolated-harness",
     ):
         return self.run_harness(
             "record",
@@ -109,15 +113,15 @@ class RunConfigTests(unittest.TestCase):
             str(workspace),
             str(receipt),
             "--condition",
-            "U0",
+            condition,
             "--pair-id",
             "pair-a",
             "--replicate",
             "1",
             "--model-id",
-            "fresh-model",
+            model_id,
             "--harness-id",
-            "isolated-harness",
+            harness_id,
             "--transcript",
             str(transcript),
             "--metrics",
@@ -193,6 +197,43 @@ class RunConfigTests(unittest.TestCase):
                         transcript,
                         metrics,
                         run_config,
+                    )
+                    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                    self.assertIn("run config", result.stderr.lower())
+                    self.assertFalse(receipt.exists())
+
+    def test_record_rejects_run_config_identity_or_intervention_mismatch(self):
+        cases = []
+
+        model_mismatch = make_run_config("U0")
+        model_mismatch["matched"]["model"]["id"] = "different-model"
+        cases.append(("model", model_mismatch, "U0"))
+
+        harness_mismatch = make_run_config("U0")
+        harness_mismatch["matched"]["harness"]["id"] = "different-harness"
+        cases.append(("harness", harness_mismatch, "U0"))
+
+        u0_with_skill = make_run_config("U1")
+        cases.append(("u0-intervention", u0_with_skill, "U0"))
+
+        u1_without_skill = make_run_config("U0")
+        cases.append(("u1-intervention", u1_without_skill, "U1"))
+
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            workspace, transcript, metrics = self.make_trial_inputs(root)
+            for index, (label, config_payload, condition) in enumerate(cases, start=1):
+                with self.subTest(label=label):
+                    run_config = root / f"mismatch-{index}.json"
+                    run_config.write_text(json.dumps(config_payload), encoding="utf-8")
+                    receipt = root / f"mismatch-receipt-{index}.json"
+                    result = self.record_with_config(
+                        workspace,
+                        receipt,
+                        transcript,
+                        metrics,
+                        run_config,
+                        condition=condition,
                     )
                     self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
                     self.assertIn("run config", result.stderr.lower())
