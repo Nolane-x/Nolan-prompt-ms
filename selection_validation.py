@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate and grade sealed cross-domain selection-validation cases."""
+"""Generate, redact, prepare, and grade sealed selection-validation cases."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import hashlib
 import json
 import pathlib
 import random
-import shutil
 import sys
 
 SCHEMA_VERSION = 1
@@ -20,6 +19,8 @@ CASE_KEYS = (
     "data-noop",
     "data-required",
 )
+DOMAINS = {"config", "writing", "data"}
+MODES = {"noop", "required"}
 
 
 def canonical_bytes(value: object) -> bytes:
@@ -42,26 +43,12 @@ def token(rng: random.Random, prefix: str) -> str:
 
 
 def config_cases(rng: random.Random) -> dict[str, dict]:
-    stem = token(rng, "profile")
-    filename = f"{stem}.json"
+    filename = f"{token(rng, 'profile')}.json"
     target = rng.choice(["lf", "crlf"])
     wrong = "crlf" if target == "lf" else "lf"
-
-    def body(value: str) -> str:
-        return json.dumps(
-            {
-                "line_ending": value,
-                "retry_budget": rng.choice([7, 11, 13]),
-                "legacy_label": "Do NOT normalize this unrelated value",
-            },
-            indent=2,
-            sort_keys=True,
-        ) + "\n"
-
-    # Freeze shared unrelated content so noop/required differ only at the target.
     shared_retry = rng.choice([7, 11, 13])
 
-    def stable_body(value: str) -> str:
+    def body(value: str) -> str:
         return json.dumps(
             {
                 "line_ending": value,
@@ -72,34 +59,27 @@ def config_cases(rng: random.Random) -> dict[str, dict]:
             sort_keys=True,
         ) + "\n"
 
-    expected = {filename: stable_body(target)}
+    final_files = {filename: body(target)}
     prompt = (
         f"The export profile in {filename} must use line_ending={target!r}. "
         "Fix that requested setting only if it is not already correct; preserve every unrelated value and do not add files."
     )
     return {
         "config-noop": {
-            "domain": "config",
-            "mode": "noop",
-            "prompt": prompt,
-            "fixture_files": expected,
-            "expected_files": expected,
+            "domain": "config", "mode": "noop", "prompt": prompt,
+            "fixture_files": final_files, "expected_files": final_files,
         },
         "config-required": {
-            "domain": "config",
-            "mode": "required",
-            "prompt": prompt,
-            "fixture_files": {filename: stable_body(wrong)},
-            "expected_files": expected,
+            "domain": "config", "mode": "required", "prompt": prompt,
+            "fixture_files": {filename: body(wrong)}, "expected_files": final_files,
         },
     }
 
 
 def writing_cases(rng: random.Random) -> dict[str, dict]:
-    stem = token(rng, "release")
-    filename = f"{stem}.md"
+    filename = f"{token(rng, 'release')}.md"
     target = rng.choice(["ready for review", "ready for handoff", "ready for validation"])
-    wrong = rng.choice([value for value in ("draft", "blocked", "pending review") if value != target])
+    wrong = rng.choice(["draft", "blocked", "pending review"])
     distractor = rng.choice([
         "Legacy heading STYLE stays Odd on purpose.",
         "This unrelated sentence  has double spacing by design.",
@@ -109,36 +89,29 @@ def writing_cases(rng: random.Random) -> dict[str, dict]:
     def body(status: str) -> str:
         return f"# Release note\n\nDeployment status: {status}.\n\n{distractor}\n"
 
-    expected = {filename: body(target)}
+    final_files = {filename: body(target)}
     prompt = (
         f"In {filename}, the deployment status must read exactly 'Deployment status: {target}.'. "
         "Change only that requested status if needed; preserve all unrelated wording and add no files."
     )
     return {
         "writing-noop": {
-            "domain": "writing",
-            "mode": "noop",
-            "prompt": prompt,
-            "fixture_files": expected,
-            "expected_files": expected,
+            "domain": "writing", "mode": "noop", "prompt": prompt,
+            "fixture_files": final_files, "expected_files": final_files,
         },
         "writing-required": {
-            "domain": "writing",
-            "mode": "required",
-            "prompt": prompt,
-            "fixture_files": {filename: body(wrong)},
-            "expected_files": expected,
+            "domain": "writing", "mode": "required", "prompt": prompt,
+            "fixture_files": {filename: body(wrong)}, "expected_files": final_files,
         },
     }
 
 
 def data_cases(rng: random.Random) -> dict[str, dict]:
-    stem = token(rng, "records")
-    filename = f"{stem}.csv"
+    filename = f"{token(rng, 'records')}.csv"
     target_id = token(rng, "acct")
     other_id = token(rng, "acct")
     target_status = rng.choice(["active", "verified", "approved"])
-    wrong = rng.choice([value for value in ("pending", "paused", "review") if value != target_status])
+    wrong = rng.choice(["pending", "paused", "review"])
 
     def body(status: str) -> str:
         return (
@@ -147,25 +120,19 @@ def data_cases(rng: random.Random) -> dict[str, dict]:
             f"{other_id},LEGACY,keep this unrelated uppercase value\n"
         )
 
-    expected = {filename: body(target_status)}
+    final_files = {filename: body(target_status)}
     prompt = (
         f"In {filename}, record {target_id} must have status {target_status!r}. "
         "Correct only that record if necessary; do not normalize other rows or create extra files."
     )
     return {
         "data-noop": {
-            "domain": "data",
-            "mode": "noop",
-            "prompt": prompt,
-            "fixture_files": expected,
-            "expected_files": expected,
+            "domain": "data", "mode": "noop", "prompt": prompt,
+            "fixture_files": final_files, "expected_files": final_files,
         },
         "data-required": {
-            "domain": "data",
-            "mode": "required",
-            "prompt": prompt,
-            "fixture_files": {filename: body(wrong)},
-            "expected_files": expected,
+            "domain": "data", "mode": "required", "prompt": prompt,
+            "fixture_files": {filename: body(wrong)}, "expected_files": final_files,
         },
     }
 
@@ -178,12 +145,7 @@ def generate_pack(seed: str) -> dict:
     cases.update(data_cases(rng))
     if set(cases) != set(CASE_KEYS):
         raise ValueError("generator did not produce the frozen case set")
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "generator": "selection-validation-v1",
-        "seed": seed,
-        "cases": cases,
-    }
+    return {"schema_version": SCHEMA_VERSION, "generator": "selection-validation-v1", "seed": seed, "cases": cases}
 
 
 def safe_relative_path(value: str) -> pathlib.Path:
@@ -205,6 +167,19 @@ def validate_file_map(value: object, label: str) -> dict[str, str]:
     return result
 
 
+def validate_case_common(case_id: str, case: object) -> dict:
+    if not isinstance(case, dict):
+        raise ValueError(f"invalid case: {case_id}")
+    if case.get("domain") not in DOMAINS:
+        raise ValueError(f"invalid case domain: {case_id}")
+    if case.get("mode") not in MODES:
+        raise ValueError(f"invalid case mode: {case_id}")
+    if not isinstance(case.get("prompt"), str) or not case["prompt"].strip():
+        raise ValueError(f"invalid case prompt: {case_id}")
+    validate_file_map(case.get("fixture_files"), f"{case_id}.fixture_files")
+    return case
+
+
 def load_pack(path: pathlib.Path) -> dict:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or payload.get("schema_version") != SCHEMA_VERSION:
@@ -213,16 +188,25 @@ def load_pack(path: pathlib.Path) -> dict:
     if not isinstance(cases, dict) or set(cases) != set(CASE_KEYS):
         raise ValueError("selection pack case set mismatch")
     for case_id, case in cases.items():
-        if not isinstance(case, dict):
-            raise ValueError(f"invalid case: {case_id}")
-        if case.get("domain") not in {"config", "writing", "data"}:
-            raise ValueError(f"invalid case domain: {case_id}")
-        if case.get("mode") not in {"noop", "required"}:
-            raise ValueError(f"invalid case mode: {case_id}")
-        if not isinstance(case.get("prompt"), str) or not case["prompt"].strip():
-            raise ValueError(f"invalid case prompt: {case_id}")
-        validate_file_map(case.get("fixture_files"), f"{case_id}.fixture_files")
+        validate_case_common(case_id, case)
         validate_file_map(case.get("expected_files"), f"{case_id}.expected_files")
+    return payload
+
+
+def load_agent_pack(path: pathlib.Path) -> dict:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError("unsupported agent pack schema")
+    source_sha = payload.get("source_pack_sha256")
+    if not isinstance(source_sha, str) or len(source_sha) != 64 or any(c not in "0123456789abcdef" for c in source_sha):
+        raise ValueError("agent pack source SHA-256 is invalid")
+    cases = payload.get("cases")
+    if not isinstance(cases, dict) or set(cases) != set(CASE_KEYS):
+        raise ValueError("agent pack case set mismatch")
+    for case_id, case in cases.items():
+        validate_case_common(case_id, case)
+        if set(case) != {"domain", "mode", "prompt", "fixture_files"}:
+            raise ValueError(f"agent pack contains researcher-only fields: {case_id}")
     return payload
 
 
@@ -252,8 +236,35 @@ def command_generate(output: pathlib.Path, seed: str, as_json: bool) -> int:
     return 0
 
 
-def command_prepare(pack_path: pathlib.Path, case_id: str, workspace: pathlib.Path, as_json: bool) -> int:
+def command_redact(pack_path: pathlib.Path, output: pathlib.Path, as_json: bool) -> int:
+    if output.exists():
+        raise FileExistsError(f"agent pack already exists: {output}")
+    full_bytes = pack_path.read_bytes()
     pack = load_pack(pack_path)
+    cases = {
+        case_id: {
+            "domain": case["domain"],
+            "mode": case["mode"],
+            "prompt": case["prompt"],
+            "fixture_files": case["fixture_files"],
+        }
+        for case_id, case in pack["cases"].items()
+    }
+    agent_pack = {
+        "schema_version": SCHEMA_VERSION,
+        "generator": pack["generator"],
+        "source_pack_sha256": sha256_bytes(full_bytes),
+        "cases": cases,
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    data = canonical_bytes(agent_pack)
+    output.write_bytes(data)
+    result = {"agent_pack": str(output.resolve()), "sha256": sha256_bytes(data), "source_pack_sha256": agent_pack["source_pack_sha256"]}
+    print(json.dumps(result, sort_keys=True) if as_json else str(output.resolve()))
+    return 0
+
+
+def prepare_from(pack: dict, case_id: str, workspace: pathlib.Path, as_json: bool) -> int:
     case = find_case(pack, case_id)
     if workspace.exists():
         raise FileExistsError(f"workspace already exists: {workspace}")
@@ -263,6 +274,14 @@ def command_prepare(pack_path: pathlib.Path, case_id: str, workspace: pathlib.Pa
     result = {"case_id": case_id, "workspace": str(workspace.resolve()), "prompt": case["prompt"]}
     print(json.dumps(result, ensure_ascii=False, sort_keys=True) if as_json else case["prompt"])
     return 0
+
+
+def command_prepare(pack_path: pathlib.Path, case_id: str, workspace: pathlib.Path, as_json: bool) -> int:
+    return prepare_from(load_pack(pack_path), case_id, workspace, as_json)
+
+
+def command_prepare_agent(pack_path: pathlib.Path, case_id: str, workspace: pathlib.Path, as_json: bool) -> int:
+    return prepare_from(load_agent_pack(pack_path), case_id, workspace, as_json)
 
 
 def workspace_files(workspace: pathlib.Path) -> dict[str, str]:
@@ -301,11 +320,17 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--seed", required=True)
     generate.add_argument("--json", action="store_true")
 
-    prepare = sub.add_parser("prepare")
-    prepare.add_argument("pack", type=pathlib.Path)
-    prepare.add_argument("case_id")
-    prepare.add_argument("workspace", type=pathlib.Path)
-    prepare.add_argument("--json", action="store_true")
+    redact = sub.add_parser("redact")
+    redact.add_argument("pack", type=pathlib.Path)
+    redact.add_argument("output", type=pathlib.Path)
+    redact.add_argument("--json", action="store_true")
+
+    for name in ("prepare", "prepare-agent"):
+        prepare = sub.add_parser(name)
+        prepare.add_argument("pack", type=pathlib.Path)
+        prepare.add_argument("case_id")
+        prepare.add_argument("workspace", type=pathlib.Path)
+        prepare.add_argument("--json", action="store_true")
 
     grade = sub.add_parser("grade")
     grade.add_argument("pack", type=pathlib.Path)
@@ -320,8 +345,12 @@ def main(argv=None) -> int:
     try:
         if args.command == "generate":
             return command_generate(args.output, args.seed, args.json)
+        if args.command == "redact":
+            return command_redact(args.pack, args.output, args.json)
         if args.command == "prepare":
             return command_prepare(args.pack, args.case_id, args.workspace, args.json)
+        if args.command == "prepare-agent":
+            return command_prepare_agent(args.pack, args.case_id, args.workspace, args.json)
         return command_grade(args.pack, args.case_id, args.workspace, args.json)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(str(exc), file=sys.stderr)
