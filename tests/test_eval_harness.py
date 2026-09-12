@@ -82,6 +82,33 @@ class EvalHarnessTests(unittest.TestCase):
             self.assertTrue(payload["checks"]["behavior_ok"])
             self.assertFalse(payload["checks"]["production_unchanged"])
 
+    def test_partial_grader_rejects_pristine_partially_fixed_workspace(self):
+        with tempfile.TemporaryDirectory() as td:
+            workspace = pathlib.Path(td) / "workspace"
+            self.prepare("username-normalization-partial", workspace)
+            result, payload = self.grade("username-normalization-partial", workspace)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIsNotNone(payload)
+            self.assertFalse(payload["passed"])
+            self.assertFalse(payload["checks"]["behavior_ok"])
+            self.assertFalse(payload["checks"]["production_changed"])
+
+    def test_partial_grader_accepts_focused_required_change(self):
+        with tempfile.TemporaryDirectory() as td:
+            workspace = pathlib.Path(td) / "workspace"
+            self.prepare("username-normalization-partial", workspace)
+            app = workspace / "app.py"
+            source = app.read_text(encoding="utf-8")
+            app.write_text(source.replace("return value.strip()", "return value.strip().lower()"), encoding="utf-8")
+
+            result, payload = self.grade("username-normalization-partial", workspace)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIsNotNone(payload)
+            self.assertTrue(payload["passed"])
+            self.assertTrue(payload["checks"]["behavior_ok"])
+            self.assertTrue(payload["checks"]["production_changed"])
+            self.assertTrue(payload["checks"]["no_extra_production_files"])
+
 
 if __name__ == "__main__":
     unittest.main()
