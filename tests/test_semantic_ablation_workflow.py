@@ -47,6 +47,14 @@ class SemanticAblationWorkflowTests(unittest.TestCase):
         self.assertIn("actions/upload-artifact@v4", text)
         self.assertIn("if: always()", text)
 
+    def test_matched_tool_set_comes_from_runtime_attestation(self):
+        text = self.workflow_text()
+        self.assertIn('tool_set = attestation["tool_set"]', text)
+        self.assertIn('"tool_set": tool_set', text)
+        self.assertIn("--available-tools='bash,create,edit,view,glob,grep'", text)
+        self.assertNotIn("--available-tools='bash,apply_patch,create,edit,view,glob,grep'", text)
+        self.assertNotIn('"tool_set": ["bash", "apply_patch", "create", "edit", "view", "glob", "grep"]', text)
+
     def test_pair_pins_one_cli_version_and_summarizes_exactly_two_receipts(self):
         text = self.workflow_text()
         self.assertIn("npm view @github/copilot version", text)
