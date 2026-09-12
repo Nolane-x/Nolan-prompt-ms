@@ -20,6 +20,7 @@ Nolane Prompt MS takes the opposite approach: compress research into a small ker
 | `EVALS.md` | Behavioral gates, pressure scenarios, and scoring contract |
 | `evals/evals.json` | Preregistered executable development utility cases |
 | `evals/target-authority-selection-plan.json` | Frozen, machine-readable cross-domain selection-validation contract; contains no final hidden task content |
+| `evals/target-authority-selection-results-2026-09-12.json` | Preserved attempt-1 selection evidence, rejection basis, provenance, and excluded-attempt boundary |
 | `evals/cases/` | Agent-visible development fixtures plus out-of-trial deterministic graders |
 | `eval_harness.py` | Lists, prepares, grades, records, and summarizes U0/U1 trials; Python stdlib only |
 | `semantic_ablation.py` | Records and summarizes matched R1/R1A semantic-ablation trials |
@@ -42,15 +43,17 @@ No source document is copied into runtime context. Research is distilled only wh
 
 The runtime kernel remains **446 words**, has no runtime dependencies, and remains git blob `ac48f09ab02eca63e014b4c25f86e492ae5559cb`. It has not been edited by the evaluation work described below.
 
-Behavioral experiments have now run. The first three-case U0/U1 development set found no measured functional gain for current runtime R1 over no guidance and exposed an intermittent no-op target-widening failure. A frozen R1A candidate — exact R1 plus one target-authority sentence — subsequently passed its preregistered three-replicate development-stability rule on the opposing normalization pair. That is **development evidence only**, not runtime residency or general proof.
+The first three-case U0/U1 development set found no measured functional gain for current runtime R1 over no guidance and exposed an intermittent no-op target-widening failure. A frozen R1A candidate — exact R1 plus one target-authority sentence — then passed its preregistered three-replicate development-stability rule on the opposing normalization pair. That was **development evidence only**.
 
-The next boundary is preregistered in `evals/target-authority-selection-plan.json`: six cross-domain semantic cells, two paired replicates per cell, and a fixed budget of 24 model trials. The contract freezes R1/R1A identities, comparability dimensions, contamination rules, stopping rules, and the pass/fail rule while deliberately omitting final hidden prompts, fixture values, and expected answers.
+R1A has now reached its frozen cross-domain selection boundary. Run `34702008909`, attempt 1, requested Copilot `auto/default`; preflight attested actual `gpt-5.6-luna` with reasoning `medium`, and the workflow generated the hidden bundle only after that preflight. All 24 arm jobs produced immutable receipts.
 
-The selection execution infrastructure is implemented and CI-verified. `selection_validation.py` deterministically generates all twelve fresh cases from a seed, admits every reference path before behavioral inference, records immutable provenance-bound receipts, rejects matched-context drift, and evaluates the preregistered rule literally. The production workflow now performs model/runtime preflight **before** it generates any hidden bundle, creates the final execution seed internally rather than accepting it from dispatch, removes both hidden grader material and the repository checkout from the evaluated agent's filesystem during inference, and restores trusted researcher-side material only after inference for grading. Probe/verification credit comes from structured `tool.execution_start` evidence, not assistant self-report or unrelated metadata strings.
+The frozen summary found **11/12 comparable pairs**. One verify pair was fail-closed as `not_comparable` because provider auto-routing sent the R1 arm to `mai-code-1.1-flash` while the matched R1A arm routed to `gpt-5.6-luna`, with different actual tool sets. The formal summary is therefore infrastructure-invalid rather than a complete 12-pair causal estimate.
 
-A first manual dispatch, run `34699852491`, requested `gpt-5.6-luna` with reasoning `medium`. Copilot CLI `1.0.83` rejected that explicit model identifier before successful inference. The run is therefore **infrastructure failure only**: it produced no valid behavioral receipts and does not count as a selection sample. The hardened workflow prevents this class of failure from generating the final hidden selection bundle by preflighting the requested model/reasoning first.
+The comparable behavioral evidence is nevertheless sufficient to reject R1A under the preregistered conjunctive rule. All four preserve pairs were `same_pass`, so R1A produced **0/4 preserve candidate gains** against a frozen minimum of 2. Across the seven comparable act/probe/verify pairs, R1A passed only 3 and failed 4; even perfect repair of the one non-comparable verify pair could raise that to at most 4/8, below the required 8/8. Candidate harm was 0 and preserve passes were 4/4, but those checks are not sufficient on their own.
 
-The frozen 24-trial behavioral selection experiment therefore remains uncompleted. Normal push/PR CI does not dispatch model trials.
+Therefore R1A **does not pass the frozen selection-validation boundary and is not promoted to runtime residency**. The exact result/provenance is recorded in `evals/target-authority-selection-results-2026-09-12.json`. Runtime R1 remains unchanged because no replacement has earned residency, not because R1 has been proven.
+
+A later GitHub rerun attempt unexpectedly restarted the workflow dependency graph and regenerated a new hidden bundle after attempt-1 outcomes had already been observed. That attempt is excluded in full and must never be combined with attempt-1 evidence. The rerun boundary must be hardened before the next hidden experiment.
 
 Do not describe this version as proven, best, converged, behaviorally verified, cross-domain validated, or runtime-ready.
 
@@ -142,11 +145,13 @@ Important limitations:
 
 - dispatching can consume Copilot requests/credits and is therefore an explicit experimental action, not normal CI;
 - the CLI package version is pinned per matched execution, but the backend snapshot remains `provider-managed-unpinned` unless the provider exposes stronger immutable identity;
+- provider `auto` routing can differ across arm jobs, so actual-model and actual-tool-set comparability must remain fail-closed;
 - token counts remain `null` when the harness cannot observe them reliably; they are never estimated;
 - development stability is not cross-domain validation, portability, activation, or final-holdout evidence;
-- even a passing selection run grants only **selection-stable under the observed harness/model configuration; not runtime-resident**.
+- consumed selection cases are diagnostic material only and cannot be reused as hidden evidence;
+- even a passing future selection run would grant only **selection-stable under the observed harness/model configuration; not runtime-resident**.
 
-The current conversation has seen the development skill/cases/graders, so it must not substitute itself for a fresh evaluated-agent context.
+The current conversation has seen the development skill/cases/graders and the attempt-1 selection summary, so it must not substitute itself for a fresh evaluated-agent context.
 
 ## Development Rule
 
