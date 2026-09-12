@@ -6,12 +6,12 @@ on:
       model:
         description: Copilot model identifier or auto
         required: true
-        default: gpt-5.4
+        default: auto
         type: string
       reasoning_effort:
         description: Reasoning effort, or default to omit the flag
         required: true
-        default: medium
+        default: default
         type: choice
         options:
           - default
