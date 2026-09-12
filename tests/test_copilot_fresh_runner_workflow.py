@@ -93,6 +93,14 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
         self.assertNotIn('"tool_calls": None', text)
         self.assertNotIn('reasoning_effort = None if reasoning_effort_input == "default" else reasoning_effort_input', text)
 
+    def test_matched_tool_set_comes_from_runtime_attestation(self):
+        text = self.workflow_text()
+        self.assertIn('tool_set = attestation["tool_set"]', text)
+        self.assertIn('"tool_set": tool_set', text)
+        self.assertIn("--available-tools='bash,create,edit,view,glob,grep'", text)
+        self.assertNotIn("--available-tools='bash,apply_patch,create,edit,view,glob,grep'", text)
+        self.assertNotIn('"tool_set": ["bash", "apply_patch", "create", "edit", "view", "glob", "grep"]', text)
+
 
 if __name__ == "__main__":
     unittest.main()
