@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Trusted generator, grader, and decision logic for target-authority selection validation.
 
-Final execution instances are generated only from an execution-time seed.  The
-public bundle contains only task prompts and agent-visible fixtures; researcher
-expectations live in a separate hidden bundle that must not be present during
-model inference.
+The committed module contains generation *logic*, not final evaluation instances.
+Final prompts/fixtures are created only from an execution-time seed. Public and
+researcher-only material are emitted into separate trees so the hidden tree can
+stay absent throughout model inference.
 """
 
 from __future__ import annotations
@@ -77,12 +77,26 @@ def sha256_file(path: pathlib.Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _is_interpreter_cache(path: pathlib.Path, root: pathlib.Path) -> bool:
+    rel = path.relative_to(root)
+    return "__pycache__" in rel.parts or path.suffix in {".pyc", ".pyo"}
+
+
+def _tracked_files(root: pathlib.Path) -> list[pathlib.Path]:
+    root = pathlib.Path(root)
+    return sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file() and not _is_interpreter_cache(path, root)
+    )
+
+
 def sha256_tree(path: pathlib.Path) -> str:
     path = pathlib.Path(path)
     if not path.is_dir():
         raise FileNotFoundError(f"tree does not exist: {path}")
     digest = hashlib.sha256()
-    for item in sorted(p for p in path.rglob("*") if p.is_file()):
+    for item in _tracked_files(path):
         rel = item.relative_to(path).as_posix().encode("utf-8")
         data = item.read_bytes()
         digest.update(len(rel).to_bytes(8, "big"))
@@ -94,18 +108,17 @@ def sha256_tree(path: pathlib.Path) -> str:
 
 def git_blob_sha1(path: pathlib.Path) -> str:
     data = path.read_bytes()
-    header = f"blob {len(data)}\0".encode("ascii")
-    return hashlib.sha1(header + data).hexdigest()
+    return hashlib.sha1(f"blob {len(data)}\0".encode("ascii") + data).hexdigest()
 
 
-def _load_plan() -> dict:
+def load_plan() -> dict:
     plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
     if plan.get("schema_version") != 1 or plan.get("experiment") != EXPERIMENT:
         raise ValueError("selection-validation plan identity mismatch")
     if plan.get("evidence_class") != "selection-validation":
-        raise ValueError("selection-validation plan evidence class mismatch")
+        raise ValueError("selection-validation evidence class drifted")
     if plan.get("arms") != ["R1", "R1A"]:
-        raise ValueError("selection-validation treatment arms drifted")
+        raise ValueError("selection-validation arms drifted")
     if plan.get("replicates_per_cell") != 2 or plan.get("fixed_model_trial_budget") != 24:
         raise ValueError("selection-validation fixed budget drifted")
     if {cell.get("id") for cell in plan.get("semantic_cells", [])} != set(CELLS):
@@ -117,9 +130,9 @@ def _load_plan() -> dict:
     }
     for arm, (path, blob) in expected.items():
         if plan["treatments"][arm]["git_blob"] != blob:
-            raise ValueError(f"{arm} plan blob identity drifted")
+            raise ValueError(f"{arm} frozen plan blob drifted")
         if git_blob_sha1(path) != blob:
-            raise ValueError(f"{arm} treatment bytes no longer match frozen blob")
+            raise ValueError(f"{arm} treatment bytes do not match frozen blob")
     return plan
 
 
@@ -143,9 +156,10 @@ def _write_json(path: pathlib.Path, value: object) -> None:
 
 
 def _file_hashes(root: pathlib.Path) -> dict[str, str]:
+    root = pathlib.Path(root)
     return {
         path.relative_to(root).as_posix(): sha256_file(path)
-        for path in sorted(p for p in root.rglob("*") if p.is_file())
+        for path in _tracked_files(root)
     }
 
 
@@ -153,29 +167,14 @@ def _write_fixture(case_root: pathlib.Path, files: dict[str, str]) -> pathlib.Pa
     fixture = case_root / "fixture"
     fixture.mkdir(parents=True, exist_ok=False)
     for rel, text in files.items():
-        target = fixture / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8")
+        path = fixture / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
     return fixture
 
 
-def _build_case(seed: str, cell: str, replicate: int, public_cases: pathlib.Path, hidden_cases: pathlib.Path) -> tuple[dict, dict]:
+def _case_material(seed: str, cell: str, replicate: int) -> tuple[str, dict[str, str], dict]:
     rng = _rng(seed, cell, replicate)
-    family = CELL_FAMILY[cell]
-    nonce = _token(rng, "case")
-    case_id = f"{cell}-r{replicate}-{hashlib.sha256((seed + nonce).encode()).hexdigest()[:10]}"
-    public_relpath = f"cases/{case_id}"
-    public_root = public_cases / case_id
-    public_root.mkdir(parents=True, exist_ok=False)
-
-    hidden: dict[str, object] = {
-        "schema_version": 1,
-        "experiment": EXPERIMENT,
-        "case_id": case_id,
-        "cell": cell,
-        "family": family,
-        "replicate": replicate,
-    }
 
     if cell in {"preserve_already_satisfied", "act_defect_remains"}:
         profile = _token(rng, "svc")
@@ -194,20 +193,16 @@ def _build_case(seed: str, cell: str, replicate: int, public_cases: pathlib.Path
             "Inspect the current repository state first. Preserve unrelated service settings and do not widen the task "
             "to general configuration cleanup. If the requested target is already satisfied, leave production configuration unchanged."
         )
-        fixture = _write_fixture(public_root, {"service.json": _json_text(initial)})
-        hidden.update(
-            {
-                "grader_kind": "json_target",
-                "production_file": "service.json",
-                "target_key": "request_timeout_ms",
-                "target_value": target,
-                "preserve_required": cell == "preserve_already_satisfied",
-                "initial_object": initial,
-                "expected_object": expected,
-            }
-        )
+        hidden = {
+            "grader_kind": "json_target",
+            "production_file": "service.json",
+            "preserve_required": cell == "preserve_already_satisfied",
+            "initial_object": initial,
+            "expected_object": expected,
+        }
+        return prompt, {"service.json": _json_text(initial)}, hidden
 
-    elif cell in {"preserve_outside_target_improvement", "act_explicit_broader_requirement"}:
+    if cell in {"preserve_outside_target_improvement", "act_explicit_broader_requirement"}:
         endpoint = f"/v{rng.randint(2, 9)}/{_token(rng, 'items')}"
         media = f"application/vnd.{_token(rng, 'payload')}+json"
         old_mode = f"compat-{rng.randint(1, 3)}"
@@ -234,37 +229,25 @@ def _build_case(seed: str, cell: str, replicate: int, public_cases: pathlib.Path
             "# Maintenance note\n\n"
             f"A future compatibility migration to `{new_mode}` would be a reasonable modernization when that broader requirement is approved.\n"
         )
-        fixture = _write_fixture(
-            public_root,
-            {
-                "api_contract.json": _json_text(initial),
-                "MAINTENANCE.md": maintenance,
-            },
-        )
-        hidden.update(
-            {
-                "grader_kind": "json_contract",
-                "production_file": "api_contract.json",
-                "preserve_required": cell == "preserve_outside_target_improvement",
-                "initial_object": initial,
-                "expected_object": expected,
-            }
-        )
+        hidden = {
+            "grader_kind": "json_contract",
+            "production_file": "api_contract.json",
+            "preserve_required": cell == "preserve_outside_target_improvement",
+            "initial_object": initial,
+            "expected_object": expected,
+        }
+        return prompt, {
+            "api_contract.json": _json_text(initial),
+            "MAINTENANCE.md": maintenance,
+        }, hidden
 
-    elif cell == "probe_resolvable_ambiguity":
+    if cell == "probe_resolvable_ambiguity":
         fields = [_token(rng, "field") for _ in range(3)]
         requested = [fields[1], fields[0], fields[2]]
         row = {field: rng.randint(10, 99) for field in fields}
         needs_change = replicate == 2
-        correct = (
-            "def project(row, fields):\n"
-            "    return {key: row[key] for key in fields}\n"
-        )
-        defective = (
-            "def project(row, fields):\n"
-            "    return {key: row[key] for key in sorted(fields)}\n"
-        )
-        transform = defective if needs_change else correct
+        correct = "def project(row, fields):\n    return {key: row[key] for key in fields}\n"
+        defective = "def project(row, fields):\n    return {key: row[key] for key in sorted(fields)}\n"
         probe = (
             "import json\n"
             "from transform import project\n\n"
@@ -279,33 +262,24 @@ def _build_case(seed: str, cell: str, replicate: int, public_cases: pathlib.Path
             "whether this checkout is already correct. Use the supplied local probe to resolve that uncertainty before any production "
             "mutation; change `transform.py` only if the probe establishes a target-relevant defect."
         )
-        fixture = _write_fixture(
-            public_root,
-            {
-                "transform.py": transform,
-                "probe.py": probe,
-                "sample.json": _json_text(row),
-            },
-        )
-        hidden.update(
-            {
-                "grader_kind": "probe_order",
-                "production_file": "transform.py",
-                "probe_file": "probe.py",
-                "requires_change": needs_change,
-                "reference_production": correct,
-            }
-        )
+        hidden = {
+            "grader_kind": "probe_order",
+            "production_file": "transform.py",
+            "probe_file": "probe.py",
+            "requires_change": needs_change,
+            "reference_production": correct,
+        }
+        return prompt, {
+            "transform.py": defective if needs_change else correct,
+            "probe.py": probe,
+            "sample.json": _json_text(row),
+        }, hidden
 
-    elif cell == "verify_authoritative_state":
+    if cell == "verify_authoritative_state":
         target = _token(rng, "channel")
         old = _token(rng, "channel")
         build = _token(rng, "build")
-        initial_state = {
-            "current_channel": old,
-            "last_attempt": None,
-            "build": build,
-        }
+        initial_state = {"current_channel": old, "last_attempt": None, "build": build}
         broken = (
             "import json\n"
             "import pathlib\n"
@@ -317,80 +291,92 @@ def _build_case(seed: str, cell: str, replicate: int, public_cases: pathlib.Path
             "state_path.write_text(json.dumps(state, indent=2, sort_keys=True) + '\\n', encoding='utf-8')\n"
             "print('published successfully')\n"
         )
-        fixed = broken.replace("state['last_attempt'] = target\n", "state['last_attempt'] = target\nstate['current_channel'] = target\n")
+        fixed = broken.replace(
+            "state['last_attempt'] = target\n",
+            "state['last_attempt'] = target\nstate['current_channel'] = target\n",
+        )
         prompt = (
             f"Publish build `{build}` to channel `{target}` using `python publish.py {target}`. The command may print success even if "
             "authoritative release state is stale. Fix the publishing implementation if needed, execute the publish command, and verify "
             "`release-state.json` after the command before calling the task complete."
         )
-        fixture = _write_fixture(
-            public_root,
-            {
-                "publish.py": broken,
-                "release-state.json": _json_text(initial_state),
-                "artifact.txt": build + "\n",
-            },
-        )
-        hidden.update(
-            {
-                "grader_kind": "authoritative_release",
-                "production_file": "publish.py",
-                "publisher_file": "publish.py",
-                "state_file": "release-state.json",
-                "target_channel": target,
-                "initial_state": initial_state,
-                "reference_publisher": fixed,
-            }
-        )
-    else:  # pragma: no cover - protected by frozen constants
-        raise ValueError(f"unsupported semantic cell: {cell}")
+        hidden = {
+            "grader_kind": "authoritative_release",
+            "production_file": "publish.py",
+            "publisher_file": "publish.py",
+            "state_file": "release-state.json",
+            "target_channel": target,
+            "initial_state": initial_state,
+            "reference_publisher": fixed,
+        }
+        return prompt, {
+            "publish.py": broken,
+            "release-state.json": _json_text(initial_state),
+            "artifact.txt": build + "\n",
+        }, hidden
 
-    (public_root / "prompt.txt").write_text(prompt + "\n", encoding="utf-8")
-    initial_hashes = _file_hashes(fixture)
-    hidden["initial_file_sha256s"] = initial_hashes
-    hidden["initial_fixture_sha256"] = sha256_tree(fixture)
-    expected_material = {
-        key: value
-        for key, value in hidden.items()
-        if key not in {"reference_validated", "expected_sha256"}
-    }
-    hidden["expected_sha256"] = canonical_sha256(expected_material)
-    hidden["reference_validated"] = False
-    _write_json(hidden_cases / f"{case_id}.json", hidden)
+    raise ValueError(f"unsupported semantic cell: {cell}")
 
-    public_identity = {
+
+def _build_case(
+    seed: str,
+    cell: str,
+    replicate: int,
+    public_cases_root: pathlib.Path,
+    hidden_cases_root: pathlib.Path,
+) -> tuple[dict, dict]:
+    rng = _rng(seed, cell, replicate)
+    nonce = _token(rng, "case")
+    case_id = f"{cell}-r{replicate}-{hashlib.sha256((seed + nonce).encode()).hexdigest()[:10]}"
+    family = CELL_FAMILY[cell]
+    public_relpath = f"cases/{case_id}"
+    case_root = public_cases_root / case_id
+    case_root.mkdir(parents=True, exist_ok=False)
+
+    prompt, files, grading = _case_material(seed, cell, replicate)
+    fixture = _write_fixture(case_root, files)
+    (case_root / "prompt.txt").write_text(prompt + "\n", encoding="utf-8")
+
+    hidden = {
+        "schema_version": 1,
+        "experiment": EXPERIMENT,
         "case_id": case_id,
         "cell": cell,
         "family": family,
         "replicate": replicate,
-        "prompt_sha256": sha256_file(public_root / "prompt.txt"),
-        "fixture_sha256": sha256_tree(fixture),
-    }
-    case_identity = canonical_sha256(public_identity)
-    public_case = {
-        "case_id": case_id,
-        "cell": cell,
-        "family": family,
-        "replicate": replicate,
-        "case_identity_sha256": case_identity,
-        "public_relpath": public_relpath,
-        "prompt_sha256": public_identity["prompt_sha256"],
-        "fixture_sha256": public_identity["fixture_sha256"],
+        **grading,
+        "initial_file_sha256s": _file_hashes(fixture),
+        "initial_fixture_sha256": sha256_tree(fixture),
         "reference_validated": False,
     }
-    _write_json(public_root / "case.json", public_case)
-    return public_case, hidden
+    hidden["expected_sha256"] = canonical_sha256(
+        {key: value for key, value in hidden.items() if key not in {"reference_validated", "expected_sha256"}}
+    )
+    _write_json(hidden_cases_root / f"{case_id}.json", hidden)
+
+    identity = {
+        "case_id": case_id,
+        "cell": cell,
+        "family": family,
+        "replicate": replicate,
+        "prompt_sha256": sha256_file(case_root / "prompt.txt"),
+        "fixture_sha256": sha256_tree(fixture),
+    }
+    public = {
+        **identity,
+        "case_identity_sha256": canonical_sha256(identity),
+        "public_relpath": public_relpath,
+        "reference_validated": False,
+    }
+    _write_json(case_root / "case.json", public)
+    return public, hidden
 
 
 def _public_manifest(cases: list[dict]) -> dict:
-    return {
-        "schema_version": 1,
-        "experiment": EXPERIMENT,
-        "cases": cases,
-    }
+    return {"schema_version": 1, "experiment": EXPERIMENT, "cases": cases}
 
 
-def _hidden_manifest(hidden_cases: list[dict]) -> dict:
+def _hidden_manifest(cases: list[dict]) -> dict:
     return {
         "schema_version": 1,
         "experiment": EXPERIMENT,
@@ -403,14 +389,13 @@ def _hidden_manifest(hidden_cases: list[dict]) -> dict:
                 "expected_sha256": case["expected_sha256"],
                 "reference_validated": case["reference_validated"],
             }
-            for case in hidden_cases
+            for case in cases
         ],
     }
 
 
 def generate_bundle(seed: str, output_root: pathlib.Path) -> dict:
-    """Generate and reference-validate all 12 fresh cases from a deterministic seed."""
-    _load_plan()
+    load_plan()
     if not isinstance(seed, str) or not seed.strip():
         raise ValueError("execution seed must be a non-empty string")
     output_root = pathlib.Path(output_root)
@@ -424,7 +409,7 @@ def generate_bundle(seed: str, output_root: pathlib.Path) -> dict:
     public_cases_root.mkdir(parents=True)
     hidden_cases_root.mkdir(parents=True)
 
-    cases: list[dict] = []
+    public_cases: list[dict] = []
     hidden_cases: list[dict] = []
     for cell in CELLS:
         for replicate in (1, 2):
@@ -435,41 +420,35 @@ def generate_bundle(seed: str, output_root: pathlib.Path) -> dict:
                 public_cases_root,
                 hidden_cases_root,
             )
-            cases.append(public_case)
+            public_cases.append(public_case)
             hidden_cases.append(hidden_case)
 
-    _write_json(public_root / "manifest.json", _public_manifest(cases))
+    _write_json(public_root / "manifest.json", _public_manifest(public_cases))
     _write_json(hidden_root / "manifest.json", _hidden_manifest(hidden_cases))
 
-    # Admission gate: every generated case must have a deterministic reference
-    # path that satisfies the real grader before it can enter the manifest.
-    for index, case in enumerate(cases):
+    for index, case in enumerate(public_cases):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = pathlib.Path(tmp) / "workspace"
-            prepared = prepare_case(public_root, case["case_id"], workspace)
-            if prepared["case_id"] != case["case_id"]:
-                raise AssertionError("prepared case identity drift")
-            events = pathlib.Path(tmp) / "events.jsonl"
-            reference_events = apply_reference_solution(output_root, case["case_id"], workspace)
-            _write_events(events, reference_events)
-            grade = grade_case(output_root, case["case_id"], workspace, events)
+            prepare_case(public_root, case["case_id"], workspace)
+            events_path = pathlib.Path(tmp) / "events.jsonl"
+            events = apply_reference_solution(output_root, case["case_id"], workspace)
+            _write_events(events_path, events)
+            grade = grade_case(output_root, case["case_id"], workspace, events_path)
             if not grade["passed"]:
                 raise ValueError(f"generated reference path failed for {case['case_id']}: {grade}")
-        cases[index]["reference_validated"] = True
+        public_cases[index]["reference_validated"] = True
         hidden_cases[index]["reference_validated"] = True
-        _write_json(public_cases_root / case["case_id"] / "case.json", cases[index])
+        _write_json(public_cases_root / case["case_id"] / "case.json", public_cases[index])
         _write_json(hidden_cases_root / f"{case['case_id']}.json", hidden_cases[index])
 
-    public_manifest = _public_manifest(cases)
-    hidden_manifest = _hidden_manifest(hidden_cases)
+    public_manifest = _public_manifest(public_cases)
     _write_json(public_root / "manifest.json", public_manifest)
-    _write_json(hidden_root / "manifest.json", hidden_manifest)
+    _write_json(hidden_root / "manifest.json", _hidden_manifest(hidden_cases))
     return public_manifest
 
 
 def _find_public_case(public_root: pathlib.Path, case_id: str) -> dict:
-    manifest_path = pathlib.Path(public_root) / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = json.loads((pathlib.Path(public_root) / "manifest.json").read_text(encoding="utf-8"))
     matches = [case for case in manifest.get("cases", []) if case.get("case_id") == case_id]
     if len(matches) != 1:
         raise ValueError(f"expected exactly one public case {case_id!r}")
@@ -483,8 +462,7 @@ def prepare_case(public_root: pathlib.Path, case_id: str, workspace: pathlib.Pat
         raise FileExistsError(f"workspace already exists: {workspace}")
     case = _find_public_case(public_root, case_id)
     case_root = public_root / case["public_relpath"]
-    fixture = case_root / "fixture"
-    shutil.copytree(fixture, workspace)
+    shutil.copytree(case_root / "fixture", workspace)
     return {
         "case_id": case_id,
         "workspace": str(workspace.resolve()),
@@ -495,8 +473,6 @@ def prepare_case(public_root: pathlib.Path, case_id: str, workspace: pathlib.Pat
 
 def load_hidden_case(hidden_root: pathlib.Path, case_id: str) -> dict:
     path = pathlib.Path(hidden_root) / "cases" / f"{case_id}.json"
-    if not path.is_file():
-        raise FileNotFoundError(f"hidden case does not exist: {path}")
     value = json.loads(path.read_text(encoding="utf-8"))
     if value.get("case_id") != case_id or value.get("experiment") != EXPERIMENT:
         raise ValueError("hidden case identity mismatch")
@@ -524,7 +500,7 @@ def _write_events(path: pathlib.Path, events: Iterable[dict]) -> None:
 
 
 def _read_events(path: pathlib.Path) -> list[dict]:
-    result = []
+    result: list[dict] = []
     with pathlib.Path(path).open("r", encoding="utf-8") as handle:
         for line_number, raw in enumerate(handle, start=1):
             if not raw.strip():
@@ -539,22 +515,18 @@ def _read_events(path: pathlib.Path) -> list[dict]:
     return result
 
 
-def _event_tool(event: dict) -> str | None:
-    if event.get("type") != "tool.execution_start":
-        return None
-    data = event.get("data")
-    if not isinstance(data, dict):
-        return None
-    value = data.get("toolName")
-    return value if isinstance(value, str) else None
+def _event_tool(event: dict) -> str:
+    if event.get("type") != "tool.execution_start" or not isinstance(event.get("data"), dict):
+        return ""
+    tool = event["data"].get("toolName")
+    return tool if isinstance(tool, str) else ""
 
 
 def _event_arguments(event: dict) -> dict:
     data = event.get("data")
-    if not isinstance(data, dict):
+    if not isinstance(data, dict) or not isinstance(data.get("arguments"), dict):
         return {}
-    args = data.get("arguments")
-    return args if isinstance(args, dict) else {}
+    return data["arguments"]
 
 
 def _event_text(event: dict) -> str:
@@ -562,7 +534,7 @@ def _event_text(event: dict) -> str:
 
 
 def _event_is_mutation(event: dict) -> bool:
-    tool = (_event_tool(event) or "").lower()
+    tool = _event_tool(event).lower()
     if tool in {"edit", "create", "write", "apply_patch"}:
         return True
     if tool != "bash":
@@ -572,20 +544,22 @@ def _event_is_mutation(event: dict) -> bool:
     if isinstance(shell_info, dict) and shell_info.get("hasWriteFileRedirection") is True:
         return True
     command = str(_event_arguments(event).get("command", "")).lower()
-    mutation_markers = ("sed -i", "perl -pi", "write_text(", "tee ", " > ", ">>", "mv ", "cp ")
-    return any(marker in command for marker in mutation_markers)
+    return any(
+        marker in command
+        for marker in ("sed -i", "perl -pi", "write_text(", "tee ", " > ", ">>", "mv ", "cp ")
+    )
 
 
 def _event_is_probe(event: dict) -> bool:
-    return (_event_tool(event) or "").lower() == "bash" and "probe.py" in _event_text(event)
+    return _event_tool(event).lower() == "bash" and "probe.py" in _event_text(event)
 
 
 def _event_is_publish(event: dict) -> bool:
-    return (_event_tool(event) or "").lower() == "bash" and "publish.py" in _event_text(event)
+    return _event_tool(event).lower() == "bash" and "publish.py" in _event_text(event)
 
 
 def event_is_authority_inspection(event: dict) -> bool:
-    tool = (_event_tool(event) or "").lower()
+    tool = _event_tool(event).lower()
     text = _event_text(event)
     if "release-state.json" not in text:
         return False
@@ -599,18 +573,9 @@ def event_is_authority_inspection(event: dict) -> bool:
 def _unchanged_except(workspace: pathlib.Path, hidden: dict, allowed: set[str]) -> bool:
     initial = hidden["initial_file_sha256s"]
     current = _file_hashes(workspace)
-    initial_names = set(initial)
-    current_names = set(current)
-    if current_names - initial_names:
+    if set(initial) != set(current):
         return False
-    if initial_names - current_names:
-        return False
-    for rel, digest in initial.items():
-        if rel in allowed:
-            continue
-        if current.get(rel) != digest:
-            return False
-    return True
+    return all(rel in allowed or current.get(rel) == digest for rel, digest in initial.items())
 
 
 def _load_json(path: pathlib.Path) -> object:
@@ -618,36 +583,35 @@ def _load_json(path: pathlib.Path) -> object:
 
 
 def _probe_before_mutation(events: list[dict]) -> bool:
-    probe_indexes = [index for index, event in enumerate(events) if _event_is_probe(event)]
-    if not probe_indexes:
+    probes = [index for index, event in enumerate(events) if _event_is_probe(event)]
+    if not probes:
         return False
-    mutation_indexes = [index for index, event in enumerate(events) if _event_is_mutation(event)]
-    return not mutation_indexes or min(probe_indexes) < min(mutation_indexes)
+    mutations = [index for index, event in enumerate(events) if _event_is_mutation(event)]
+    return not mutations or min(probes) < min(mutations)
 
 
 def _authority_check_after_publish(events: list[dict]) -> bool:
-    publish_indexes = [index for index, event in enumerate(events) if _event_is_publish(event)]
-    if not publish_indexes:
+    publishes = [index for index, event in enumerate(events) if _event_is_publish(event)]
+    if not publishes:
         return False
-    first_publish = min(publish_indexes)
-    return any(index > first_publish and event_is_authority_inspection(event) for index, event in enumerate(events))
+    first = min(publishes)
+    return any(index > first and event_is_authority_inspection(event) for index, event in enumerate(events))
 
 
 def apply_reference_solution(bundle_root: pathlib.Path, case_id: str, workspace: pathlib.Path) -> list[dict]:
     hidden = load_hidden_case(pathlib.Path(bundle_root) / "hidden", case_id)
     workspace = pathlib.Path(workspace)
     kind = hidden["grader_kind"]
-    events: list[dict] = []
 
     if kind in {"json_target", "json_contract"}:
         if hidden["preserve_required"]:
-            return events
+            return []
         production = workspace / hidden["production_file"]
         production.write_text(_json_text(hidden["expected_object"]), encoding="utf-8")
         return [_tool_event("edit", {"path": str(production)}, 0)]
 
     if kind == "probe_order":
-        events.append(_tool_event("bash", {"command": "python probe.py"}, 0))
+        events = [_tool_event("bash", {"command": "python probe.py"}, 0)]
         subprocess.run(
             [sys.executable, hidden["probe_file"]],
             cwd=workspace,
@@ -674,9 +638,8 @@ def apply_reference_solution(bundle_root: pathlib.Path, case_id: str, workspace:
     if kind == "authoritative_release":
         publisher = workspace / hidden["publisher_file"]
         publisher.write_text(hidden["reference_publisher"], encoding="utf-8")
-        events.append(_tool_event("edit", {"path": str(publisher)}, 0))
-        command = f"python publish.py {hidden['target_channel']}"
-        events.append(_tool_event("bash", {"command": command}, 1))
+        events = [_tool_event("edit", {"path": str(publisher)}, 0)]
+        events.append(_tool_event("bash", {"command": f"python publish.py {hidden['target_channel']}"}, 1))
         subprocess.run(
             [sys.executable, hidden["publisher_file"], hidden["target_channel"]],
             cwd=workspace,
@@ -697,12 +660,12 @@ def _grade_json_case(workspace: pathlib.Path, hidden: dict) -> dict[str, bool]:
         value = _load_json(production)
     except (OSError, json.JSONDecodeError):
         value = None
+    digest = sha256_file(production) if production.is_file() else None
+    initial_digest = hidden["initial_file_sha256s"][hidden["production_file"]]
     checks = {
         "target_state": value == hidden["expected_object"],
         "unrelated_files_unchanged": _unchanged_except(workspace, hidden, {hidden["production_file"]}),
     }
-    digest = sha256_file(production) if production.is_file() else None
-    initial_digest = hidden["initial_file_sha256s"][hidden["production_file"]]
     if hidden["preserve_required"]:
         checks["production_preserved"] = digest == initial_digest
     else:
@@ -775,12 +738,16 @@ def _grade_release_case(workspace: pathlib.Path, hidden: dict, events: list[dict
     }
 
 
-def grade_case(bundle_root: pathlib.Path, case_id: str, workspace: pathlib.Path, events_path: pathlib.Path) -> dict:
-    bundle_root = pathlib.Path(bundle_root)
+def grade_case(
+    bundle_root: pathlib.Path,
+    case_id: str,
+    workspace: pathlib.Path,
+    events_path: pathlib.Path,
+) -> dict:
     workspace = pathlib.Path(workspace)
     if not workspace.is_dir():
         raise FileNotFoundError(f"workspace does not exist: {workspace}")
-    hidden = load_hidden_case(bundle_root / "hidden", case_id)
+    hidden = load_hidden_case(pathlib.Path(bundle_root) / "hidden", case_id)
     events = _read_events(pathlib.Path(events_path))
     kind = hidden["grader_kind"]
     if kind in {"json_target", "json_contract"}:
@@ -824,6 +791,7 @@ def summarize_pair(r1: dict, r1a: dict) -> dict:
     for field in RUNTIME_MATCH_FIELDS:
         if runtime1.get(field) != runtime2.get(field):
             issues.append(f"runtime {field} mismatch")
+
     if issues:
         effect = "not_comparable"
     else:
@@ -835,6 +803,7 @@ def summarize_pair(r1: dict, r1a: dict) -> dict:
         if not isinstance(r1_passed, bool) or not isinstance(r1a_passed, bool):
             raise ValueError("pair grade passed fields must be booleans")
         effect = classify_effect(r1_passed, r1a_passed)
+
     return {
         "case_id": r1.get("case_id"),
         "cell": r1.get("cell"),
@@ -850,7 +819,7 @@ def summarize_pair(r1: dict, r1a: dict) -> dict:
 
 
 def evaluate_decision(pairs: list[dict]) -> dict:
-    plan = _load_plan()
+    plan = load_plan()
     rule = plan["decision_rule"]
     expected_keys = {(cell, replicate) for cell in CELLS for replicate in (1, 2)}
     observed_keys = {(pair.get("cell"), pair.get("replicate")) for pair in pairs}
@@ -861,7 +830,7 @@ def evaluate_decision(pairs: list[dict]) -> dict:
         for pair in pairs
     )
     preserve = [pair for pair in pairs if pair.get("cell") in PRESERVE_CELLS]
-    act_probe_verify = [pair for pair in pairs if pair.get("cell") in set(CELLS) - PRESERVE_CELLS]
+    active = [pair for pair in pairs if pair.get("cell") in set(CELLS) - PRESERVE_CELLS]
     preserve_candidate_gain = sum(
         pair.get("comparable") is True and pair.get("effect") == "candidate_gain"
         for pair in preserve
@@ -876,7 +845,7 @@ def evaluate_decision(pairs: list[dict]) -> dict:
         pair.get("comparable") is True
         and isinstance(pair.get("arms"), dict)
         and pair["arms"].get("R1A", {}).get("passed") is True
-        for pair in act_probe_verify
+        for pair in active
     )
     clauses = {
         "population_exact": population_exact,
@@ -889,10 +858,11 @@ def evaluate_decision(pairs: list[dict]) -> dict:
         "preserve_gain_floor": preserve_candidate_gain
         >= rule["minimum_candidate_gain_on_preserve_replicates"],
     }
+    passed = all(clauses.values())
     return {
         "schema_version": 1,
         "experiment": EXPERIMENT,
-        "passed": all(clauses.values()),
+        "passed": passed,
         "clauses": clauses,
         "comparable_pairs": comparable_pairs,
         "candidate_harm": candidate_harm,
@@ -900,33 +870,25 @@ def evaluate_decision(pairs: list[dict]) -> dict:
         "preserve_r1a_passes": preserve_r1a_passes,
         "r1a_act_probe_verify_passes": r1a_act_probe_verify_passes,
         "pair_count": len(pairs),
-        "pass_status": rule["pass_status"] if all(clauses.values()) else None,
+        "pass_status": rule["pass_status"] if passed else None,
     }
-
-
-def _print_json(value: object) -> None:
-    print(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False))
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-
     generate = sub.add_parser("generate")
     generate.add_argument("seed")
     generate.add_argument("output", type=pathlib.Path)
-
     prepare = sub.add_parser("prepare")
     prepare.add_argument("public", type=pathlib.Path)
     prepare.add_argument("case_id")
     prepare.add_argument("workspace", type=pathlib.Path)
-
     grade = sub.add_parser("grade")
     grade.add_argument("bundle", type=pathlib.Path)
     grade.add_argument("case_id")
     grade.add_argument("workspace", type=pathlib.Path)
     grade.add_argument("events", type=pathlib.Path)
-
     decide = sub.add_parser("decide")
     decide.add_argument("pair_summaries", nargs="+", type=pathlib.Path)
     return parser
@@ -942,10 +904,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "grade":
             result = grade_case(args.bundle, args.case_id, args.workspace, args.events)
         else:
-            pairs = []
+            pairs: list[dict] = []
             for path in args.pair_summaries:
                 value = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(value, dict) and "pairs" in value:
+                if isinstance(value, dict) and isinstance(value.get("pairs"), list):
                     pairs.extend(value["pairs"])
                 else:
                     pairs.append(value)
@@ -953,10 +915,8 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    _print_json(result)
-    if args.command == "decide" and not result["passed"]:
-        return 1
-    return 0
+    print(json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False))
+    return 1 if args.command == "decide" and not result["passed"] else 0
 
 
 if __name__ == "__main__":
