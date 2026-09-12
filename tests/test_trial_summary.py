@@ -21,6 +21,13 @@ def canonical_sha256(value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def refresh_run_config_hashes(payload: dict) -> None:
+    payload["run_config"]["matched_sha256"] = canonical_sha256(
+        payload["run_config"]["value"]["matched"]
+    )
+    payload["run_config"]["sha256"] = canonical_sha256(payload["run_config"]["value"])
+
+
 def make_run_config(condition: str, model_id: str, harness_id: str, replicate: int) -> dict:
     return {
         "schema_version": 1,
@@ -57,6 +64,18 @@ def make_run_config(condition: str, model_id: str, harness_id: str, replicate: i
             "timestamp_utc": "2026-09-12T04:20:00Z",
         },
     }
+
+
+def mutate_model_id(payload: dict) -> None:
+    payload["model_id"] = "different-model"
+    payload["run_config"]["value"]["matched"]["model"]["id"] = "different-model"
+    refresh_run_config_hashes(payload)
+
+
+def mutate_harness_id(payload: dict) -> None:
+    payload["harness_id"] = "different-harness"
+    payload["run_config"]["value"]["matched"]["harness"]["id"] = "different-harness"
+    refresh_run_config_hashes(payload)
 
 
 class TrialSummaryTests(unittest.TestCase):
@@ -208,8 +227,8 @@ class TrialSummaryTests(unittest.TestCase):
 
     def test_summarize_marks_mismatched_configs_not_comparable(self):
         mutations = {
-            "model_id": lambda payload: payload.__setitem__("model_id", "different-model"),
-            "harness_id": lambda payload: payload.__setitem__("harness_id", "different-harness"),
+            "model_id": mutate_model_id,
+            "harness_id": mutate_harness_id,
             "eval_provenance": lambda payload: payload["eval_provenance"].__setitem__(
                 "grader_sha256", "0" * 64
             ),
@@ -251,10 +270,7 @@ class TrialSummaryTests(unittest.TestCase):
             u0_receipt, u1_receipt = self.make_paired_receipts(root)
             changed = json.loads(u1_receipt.read_text(encoding="utf-8"))
             changed["run_config"]["value"]["matched"]["limits"]["max_output_tokens"] = 8000
-            changed["run_config"]["matched_sha256"] = canonical_sha256(
-                changed["run_config"]["value"]["matched"]
-            )
-            changed["run_config"]["sha256"] = canonical_sha256(changed["run_config"]["value"])
+            refresh_run_config_hashes(changed)
             u1_receipt.write_text(json.dumps(changed), encoding="utf-8")
 
             result = self.run_harness(
