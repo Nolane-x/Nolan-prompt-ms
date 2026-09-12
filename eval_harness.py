@@ -48,6 +48,32 @@ def sha256_tree(root: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
+def canonical_sha256(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def load_run_config(path: pathlib.Path) -> dict:
+    if not path.is_file():
+        raise FileNotFoundError(f"run config does not exist: {path}")
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("run config must be a JSON object")
+    matched = value.get("matched")
+    if not isinstance(matched, dict):
+        raise ValueError("run config matched must be a JSON object")
+    return {
+        "value": value,
+        "sha256": canonical_sha256(value),
+        "matched_sha256": canonical_sha256(matched),
+    }
+
+
 def validate_metrics(metrics: object) -> dict:
     if not isinstance(metrics, dict):
         raise ValueError("metrics must be a JSON object")
@@ -202,6 +228,7 @@ def command_record(
     harness_id: str,
     transcript_path: pathlib.Path,
     metrics_path: pathlib.Path,
+    run_config_path: pathlib.Path | None,
     as_json: bool,
 ) -> int:
     find_case(case_id)
@@ -223,6 +250,7 @@ def command_record(
         raise ValueError(f"unsupported condition: {condition}")
 
     metrics = validate_metrics(json.loads(metrics_path.read_text(encoding="utf-8")))
+    run_config = load_run_config(run_config_path) if run_config_path is not None else None
     case_root = CASES / case_id
     eval_provenance = {
         "harness_sha256": sha256_file(HARNESS),
@@ -251,6 +279,8 @@ def command_record(
         "metrics": metrics,
         "grade": grade,
     }
+    if run_config is not None:
+        payload["run_config"] = run_config
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
@@ -376,6 +406,7 @@ def build_parser() -> argparse.ArgumentParser:
     record_parser.add_argument("--harness-id", required=True)
     record_parser.add_argument("--transcript", required=True, type=pathlib.Path)
     record_parser.add_argument("--metrics", required=True, type=pathlib.Path)
+    record_parser.add_argument("--run-config", type=pathlib.Path)
     record_parser.add_argument("--json", action="store_true", dest="as_json")
 
     summarize_parser = subparsers.add_parser(
@@ -408,6 +439,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.harness_id,
                 args.transcript,
                 args.metrics,
+                args.run_config,
                 args.as_json,
             )
         if args.command == "summarize":
