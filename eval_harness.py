@@ -12,6 +12,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
+HARNESS = pathlib.Path(__file__).resolve()
 MANIFEST = ROOT / "evals" / "evals.json"
 CASES = ROOT / "evals" / "cases"
 SKILL = ROOT / "verified-delta" / "SKILL.md"
@@ -144,6 +145,13 @@ def command_record(
     else:
         raise ValueError(f"unsupported condition: {condition}")
 
+    case_root = CASES / case_id
+    eval_provenance = {
+        "harness_sha256": sha256_file(HARNESS),
+        "manifest_sha256": sha256_file(MANIFEST),
+        "fixture_sha256": sha256_tree(case_root / "fixture"),
+        "grader_sha256": sha256_file(case_root / "grader.py"),
+    }
     workspace_sha256 = sha256_tree(workspace)
     grade = run_grader(case_id, workspace)
     transcript_bytes = transcript_path.read_bytes()
@@ -157,6 +165,7 @@ def command_record(
         "model_id": model_id,
         "harness_id": harness_id,
         "skill": skill,
+        "eval_provenance": eval_provenance,
         "workspace_sha256": workspace_sha256,
         "transcript": {
             "sha256": hashlib.sha256(transcript_bytes).hexdigest(),
