@@ -71,7 +71,7 @@ class CopilotEventParserTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"model": "named-model"})
 
-    def test_attest_runtime_reports_actual_effort_and_tool_calls(self):
+    def test_attest_runtime_reports_actual_effort_tool_calls_and_tool_set(self):
         result = self.run_parser(
             [
                 {
@@ -89,6 +89,11 @@ class CopilotEventParserTests(unittest.TestCase):
                                     "m": {
                                         "model": "mai-code-1.1-flash",
                                         "reasoning_effort": "medium",
+                                        "tools": [
+                                            {"name": "view"},
+                                            {"name": "bash"},
+                                            {"name": "edit"},
+                                        ],
                                     }
                                 }
                             }
@@ -106,6 +111,7 @@ class CopilotEventParserTests(unittest.TestCase):
                 "model": "mai-code-1.1-flash",
                 "reasoning_effort": "medium",
                 "tool_calls": 2,
+                "tool_set": ["bash", "edit", "view"],
             },
         )
 
