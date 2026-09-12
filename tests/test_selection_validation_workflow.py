@@ -30,6 +30,17 @@ class TargetAuthoritySelectionWorkflowTests(unittest.TestCase):
         self.assertIn('python copilot_event_parser.py attest-runtime', text)
         self.assertIn('generate:\n    needs: preflight', text)
 
+    def test_generation_refuses_rerun_before_creating_private_seed(self):
+        text = self.workflow_text()
+        generate = text.index("\n  generate:\n")
+        trial = text.index("\n  trial:\n")
+        block = text[generate:trial]
+        self.assertIn("GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}", block)
+        guard = 'if [ "$GITHUB_RUN_ATTEMPT" != "1" ]; then'
+        self.assertIn(guard, block)
+        self.assertIn("Refusing selection rerun before hidden generation", block)
+        self.assertLess(block.index(guard), block.index("secrets.token_hex(32)"))
+
     def test_generation_uses_private_internal_seed_and_reference_admission_before_trials(self):
         text = self.workflow_text()
         self.assertIn("secrets.token_hex(32)", text)
