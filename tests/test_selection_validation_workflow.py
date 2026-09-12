@@ -43,6 +43,8 @@ class TargetAuthoritySelectionWorkflowTests(unittest.TestCase):
         self.assertIn('if [ "$ARM" = "R1" ]; then', text)
         self.assertIn("cat verified-delta/SKILL.md", text)
         self.assertIn("cat evals/candidates/r1-target-authority.md", text)
+        self.assertIn('rm -rf "$BUNDLE_ROOT"', text)
+        self.assertIn('test ! -e "$RUNNER_TEMP/selection-bundle-before"', text)
         self.assertIn("--available-tools='bash,create,edit,view,glob,grep'", text)
         self.assertNotIn("--available-tools='bash,apply_patch,create,edit,view,glob,grep'", text)
         self.assertIn("--disable-builtin-mcps", text)
@@ -50,14 +52,18 @@ class TargetAuthoritySelectionWorkflowTests(unittest.TestCase):
         self.assertIn("--no-remote", text)
         self.assertNotIn("--allow-all", text)
 
-    def test_actual_runtime_attestation_drives_receipts(self):
+    def test_actual_runtime_and_tool_event_evidence_drive_receipts(self):
         text = self.workflow_text()
         self.assertIn("python copilot_event_parser.py attest-runtime", text)
         self.assertIn('actual_model_id = attestation["model"]', text)
         self.assertIn('reasoning_effort = attestation["reasoning_effort"]', text)
         self.assertIn('tool_set = attestation["tool_set"]', text)
         self.assertIn('"tool_set": tool_set', text)
+        self.assertIn("python selection_process_evidence.py extract", text)
+        self.assertIn('"$TRIAL_ROOT/copilot-events.jsonl"', text)
+        self.assertIn('"$TRIAL_ROOT/grading-evidence.txt"', text)
         self.assertIn("python selection_validation.py record", text)
+        self.assertIn('--transcript "$TRIAL_ROOT/grading-evidence.txt"', text)
         self.assertIn('--arm "$ARM"', text)
         self.assertIn("if: always()", text)
 
