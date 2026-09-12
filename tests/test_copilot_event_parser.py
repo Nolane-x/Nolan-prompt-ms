@@ -10,7 +10,7 @@ PARSER = ROOT / "copilot_event_parser.py"
 
 
 class CopilotEventParserTests(unittest.TestCase):
-    def run_parser(self, events):
+    def run_parser(self, events, command="resolve-model"):
         with tempfile.TemporaryDirectory() as tmp:
             source = pathlib.Path(tmp) / "events.jsonl"
             source.write_text(
@@ -18,7 +18,7 @@ class CopilotEventParserTests(unittest.TestCase):
                 encoding="utf-8",
             )
             return subprocess.run(
-                [sys.executable, str(PARSER), "resolve-model", str(source), "--json"],
+                [sys.executable, str(PARSER), command, str(source), "--json"],
                 cwd=ROOT,
                 text=True,
                 capture_output=True,
@@ -70,6 +70,74 @@ class CopilotEventParserTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {"model": "named-model"})
+
+    def test_attest_runtime_reports_actual_effort_and_tool_calls(self):
+        result = self.run_parser(
+            [
+                {
+                    "type": "assistant.message",
+                    "data": {"model": "mai-code-1.1-flash", "content": ""},
+                },
+                {"type": "tool.execution_start", "data": {"toolName": "view"}},
+                {"type": "tool.execution_start", "data": {"toolName": "bash"}},
+                {
+                    "type": "session.usage_checkpoint",
+                    "data": {
+                        "promptCacheBreakState": [
+                            {
+                                "models": {
+                                    "m": {
+                                        "model": "mai-code-1.1-flash",
+                                        "reasoning_effort": "medium",
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                },
+            ],
+            command="attest-runtime",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            json.loads(result.stdout),
+            {
+                "model": "mai-code-1.1-flash",
+                "reasoning_effort": "medium",
+                "tool_calls": 2,
+            },
+        )
+
+    def test_attest_runtime_rejects_conflicting_reasoning_evidence(self):
+        result = self.run_parser(
+            [
+                {"type": "assistant.message", "data": {"model": "named-model", "content": ""}},
+                {
+                    "type": "session.usage_checkpoint",
+                    "data": {
+                        "promptCacheBreakState": [
+                            {
+                                "models": {
+                                    "first": {
+                                        "model": "named-model",
+                                        "reasoning_effort": "medium",
+                                    },
+                                    "second": {
+                                        "model": "named-model",
+                                        "reasoning_effort": "high",
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                },
+            ],
+            command="attest-runtime",
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
 
 
 if __name__ == "__main__":

@@ -42,7 +42,6 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
         self.assertIn("receipt.json", text)
         self.assertIn('"input_tokens": None', text)
         self.assertIn('"output_tokens": None', text)
-        self.assertIn('"tool_calls": None', text)
 
     def test_pair_pins_one_cli_version_and_summarizes_both_receipts(self):
         text = self.workflow_text()
@@ -70,7 +69,6 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
         self.assertIn("default: auto", text)
         self.assertIn("--output-format=json", text)
         self.assertIn("copilot-events.jsonl", text)
-        self.assertIn("python copilot_event_parser.py resolve-model", text)
         self.assertIn("ACTUAL_MODEL_ID=", text)
         self.assertIn('"$ACTUAL_MODEL_ID"', text)
         self.assertIn('--model-id "$ACTUAL_MODEL_ID"', text)
@@ -85,7 +83,15 @@ class CopilotFreshRunnerWorkflowTests(unittest.TestCase):
         self.assertIn('if [ "$REASONING_EFFORT" != "default" ]; then', text)
         self.assertIn('REASONING_ARGS+=("--reasoning-effort=$REASONING_EFFORT")', text)
         self.assertIn('"${REASONING_ARGS[@]}"', text)
-        self.assertIn('reasoning_effort = None if reasoning_effort_input == "default" else reasoning_effort_input', text)
+
+    def test_runtime_attestation_drives_reasoning_and_tool_metrics(self):
+        text = self.workflow_text()
+        self.assertIn("copilot_event_parser.py attest-runtime", text)
+        self.assertIn("runtime-attestation.json", text)
+        self.assertIn('"tool_calls": attestation["tool_calls"]', text)
+        self.assertIn('reasoning_effort = attestation["reasoning_effort"]', text)
+        self.assertNotIn('"tool_calls": None', text)
+        self.assertNotIn('reasoning_effort = None if reasoning_effort_input == "default" else reasoning_effort_input', text)
 
 
 if __name__ == "__main__":

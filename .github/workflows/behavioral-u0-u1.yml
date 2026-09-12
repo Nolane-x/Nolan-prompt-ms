@@ -217,19 +217,36 @@ jobs:
             exit 1
           fi
 
-          ACTUAL_MODEL_ID=$(python copilot_event_parser.py resolve-model "$TRIAL_ROOT/copilot-events.jsonl")
-          test -n "$ACTUAL_MODEL_ID"
-          printf '%s\n' "$ACTUAL_MODEL_ID" > "$TRIAL_ROOT/actual-model.txt"
-
-          python - "$TRIAL_ROOT/metrics.json" "$WALL_TIME_MS" <<'PY'
+          python copilot_event_parser.py attest-runtime \
+            "$TRIAL_ROOT/copilot-events.jsonl" \
+            --json > "$TRIAL_ROOT/runtime-attestation.json"
+          ACTUAL_MODEL_ID=$(python - "$TRIAL_ROOT/runtime-attestation.json" <<'PY'
           import json
           import pathlib
           import sys
 
+          attestation = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          model = attestation.get("model")
+          if not isinstance(model, str) or not model.strip():
+              raise SystemExit("runtime attestation missing actual model")
+          print(model)
+          PY
+          )
+          printf '%s\n' "$ACTUAL_MODEL_ID" > "$TRIAL_ROOT/actual-model.txt"
+
+          python - \
+            "$TRIAL_ROOT/metrics.json" \
+            "$WALL_TIME_MS" \
+            "$TRIAL_ROOT/runtime-attestation.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          attestation = json.loads(pathlib.Path(sys.argv[3]).read_text(encoding="utf-8"))
           payload = {
               "input_tokens": None,
               "output_tokens": None,
-              "tool_calls": None,
+              "tool_calls": attestation["tool_calls"],
               "wall_time_ms": int(sys.argv[2]),
           }
           pathlib.Path(sys.argv[1]).write_text(
@@ -241,9 +258,8 @@ jobs:
           python - \
             "$TRIAL_ROOT/run-config.json" \
             "$CONDITION" \
-            "$ACTUAL_MODEL_ID" \
+            "$TRIAL_ROOT/runtime-attestation.json" \
             "$MODEL_ID" \
-            "$REASONING_EFFORT" \
             "$COPILOT_VERSION" \
             "$HARNESS_ID" \
             "$GITHUB_RUN_ID" \
@@ -259,9 +275,8 @@ jobs:
           (
               output,
               condition,
-              actual_model_id,
+              attestation_path,
               requested_model_id,
-              reasoning_effort_input,
               copilot_version,
               harness_id,
               run_id,
@@ -270,8 +285,10 @@ jobs:
               replicate,
           ) = sys.argv[1:]
 
+          attestation = json.loads(pathlib.Path(attestation_path).read_text(encoding="utf-8"))
+          actual_model_id = attestation["model"]
+          reasoning_effort = attestation["reasoning_effort"]
           is_u1 = condition == "U1"
-          reasoning_effort = None if reasoning_effort_input == "default" else reasoning_effort_input
           payload = {
               "schema_version": 1,
               "matched": {
