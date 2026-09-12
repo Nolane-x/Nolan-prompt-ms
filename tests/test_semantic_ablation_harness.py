@@ -18,6 +18,12 @@ def sha256(path: pathlib.Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def canonical_sha256(value) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
 class SemanticAblationHarnessTests(unittest.TestCase):
     def run_harness(self, *args):
         return subprocess.run(
@@ -181,6 +187,54 @@ class SemanticAblationHarnessTests(unittest.TestCase):
             self.assertFalse(pair["comparable"])
             self.assertEqual(pair["replicates"][0]["effect"], "not_comparable")
             self.assertTrue(any("matched run config mismatch" in issue for issue in pair["issues"]))
+
+    def test_historical_receipts_do_not_depend_on_current_harness_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            r1_workspace = root / "r1-workspace"
+            r1a_workspace = root / "r1a-workspace"
+            shutil.copytree(FIXTURE, r1_workspace)
+            shutil.copytree(FIXTURE, r1a_workspace)
+            receipts = [
+                self.record(root, "R1", r1_workspace),
+                self.record(root, "R1A", r1a_workspace),
+            ]
+            for receipt in receipts:
+                payload = json.loads(receipt.read_text(encoding="utf-8"))
+                payload["eval_provenance"]["semantic_ablation_sha256"] = "a" * 64
+                receipt.write_text(json.dumps(payload), encoding="utf-8")
+
+            summary = self.run_harness("summarize", *receipts, "--json")
+            self.assertEqual(summary.returncode, 0, summary.stderr)
+            self.assertTrue(json.loads(summary.stdout)["pairs"][0]["comparable"])
+
+    def test_historical_receipts_bind_recorded_treatments_not_current_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            r1_workspace = root / "r1-workspace"
+            r1a_workspace = root / "r1a-workspace"
+            shutil.copytree(FIXTURE, r1_workspace)
+            shutil.copytree(FIXTURE, r1a_workspace)
+            receipts = {
+                "R1": self.record(root, "R1", r1_workspace),
+                "R1A": self.record(root, "R1A", r1a_workspace),
+            }
+            historical_shas = {"R1": "1" * 64, "R1A": "2" * 64}
+            historical_set = canonical_sha256(historical_shas)
+            for arm, receipt in receipts.items():
+                payload = json.loads(receipt.read_text(encoding="utf-8"))
+                payload["treatment"]["loaded_sha256"] = historical_shas[arm]
+                payload["treatment"]["treatment_sha256s"] = historical_shas
+                payload["treatment"]["treatment_set_sha256"] = historical_set
+                run_config = payload["run_config"]
+                run_config["value"]["intervention"]["available_skill_set_sha256"] = historical_shas[arm]
+                run_config["sha256"] = canonical_sha256(run_config["value"])
+                run_config["matched_sha256"] = canonical_sha256(run_config["value"]["matched"])
+                receipt.write_text(json.dumps(payload), encoding="utf-8")
+
+            summary = self.run_harness("summarize", *receipts.values(), "--json")
+            self.assertEqual(summary.returncode, 0, summary.stderr)
+            self.assertTrue(json.loads(summary.stdout)["pairs"][0]["comparable"])
 
 
 if __name__ == "__main__":
