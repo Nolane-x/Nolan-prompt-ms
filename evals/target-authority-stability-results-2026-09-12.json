@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "experiment": "target-authority-ablation-v1",
+  "recorded_date": "2026-09-12",
+  "evidence_scope": "development stability only",
+  "runtime_residency_granted": false,
+  "repository": {
+    "evidence_main_commit": "b288be12b2c9fb3bfc6a8357e2c8d2f44bfef499",
+    "runtime_skill_path": "verified-delta/SKILL.md",
+    "runtime_skill_blob": "ac48f09ab02eca63e014b4c25f86e492ae5559cb",
+    "candidate_path": "evals/candidates/r1-target-authority.md",
+    "candidate_blob": "26d93ce346deedccd7186ad5856f849136825ec3",
+    "preregistration_path": "evals/target-authority-stability-plan.json",
+    "preregistration_blob": "180a3a4a9e1c4c96aa07167f9cf8e2c6ab839464"
+  },
+  "candidate_delta": "**Hold the target boundary.** If observable behavior already satisfies the user-stated target under a discriminating probe and no evidence establishes another required defect, preserve the implementation; do not widen `S*` to justify a change.",
+  "matched_runtime_for_all_six_stability_pairs": {
+    "provider": "github-copilot-cli",
+    "model": "gpt-5.6-luna",
+    "reasoning_effort": "medium",
+    "copilot_cli": "1.0.83",
+    "provider_snapshot": "provider-managed-unpinned"
+  },
+  "replicates": [
+    {
+      "replicate": 1,
+      "case_id": "username-normalization-noop",
+      "run_id": 34685601912,
+      "effect": "candidate_gain",
+      "comparable": true,
+      "R1": {"passed": false, "tool_calls": 8, "wall_time_ms": 19222},
+      "R1A": {"passed": true, "tool_calls": 4, "wall_time_ms": 9850}
+    },
+    {
+      "replicate": 1,
+      "case_id": "username-normalization-partial",
+      "run_id": 34685602530,
+      "effect": "same_pass",
+      "comparable": true,
+      "R1": {"passed": true, "tool_calls": 9, "wall_time_ms": 19782},
+      "R1A": {"passed": true, "tool_calls": 7, "wall_time_ms": 12858}
+    },
+    {
+      "replicate": 2,
+      "case_id": "username-normalization-noop",
+      "run_id": 34686131240,
+      "effect": "same_pass",
+      "comparable": true,
+      "R1": {"passed": true, "tool_calls": 6, "wall_time_ms": 15406},
+      "R1A": {"passed": true, "tool_calls": 5, "wall_time_ms": 14380}
+    },
+    {
+      "replicate": 2,
+      "case_id": "username-normalization-partial",
+      "run_id": 34686132073,
+      "effect": "same_pass",
+      "comparable": true,
+      "R1": {"passed": true, "tool_calls": 8, "wall_time_ms": 13962},
+      "R1A": {"passed": true, "tool_calls": 5, "wall_time_ms": 10260}
+    },
+    {
+      "replicate": 3,
+      "case_id": "username-normalization-noop",
+      "run_id": 34686132936,
+      "effect": "candidate_gain",
+      "comparable": true,
+      "R1": {"passed": false, "tool_calls": 7, "wall_time_ms": 19339},
+      "R1A": {"passed": true, "tool_calls": 5, "wall_time_ms": 11599}
+    },
+    {
+      "replicate": 3,
+      "case_id": "username-normalization-partial",
+      "run_id": 34686133789,
+      "effect": "same_pass",
+      "comparable": true,
+      "R1": {"passed": true, "tool_calls": 13, "wall_time_ms": 24987},
+      "R1A": {"passed": true, "tool_calls": 8, "wall_time_ms": 12126}
+    }
+  ],
+  "preregistered_decision_rule": {
+    "no_candidate_harm_on_partial_across_replicates_1_to_3": true,
+    "minimum_noop_candidate_gain_count_across_replicates_1_to_3": 2
+  },
+  "observed_decision_inputs": {
+    "noop_candidate_gain_count": 2,
+    "noop_same_pass_count": 1,
+    "partial_candidate_harm_count": 0,
+    "partial_same_pass_count": 3
+  },
+  "decision": {
+    "passes_preregistered_development_stability_rule": true,
+    "status": "development-stable semantic candidate",
+    "runtime_residency": "not granted",
+    "next_required_gate": "fresh selection-validation / hidden holdout"
+  },
+  "raw_audit": {
+    "noop_replicate_2": "R1 and R1A both preserved value.strip().lower(); both passed. This is stochastic incumbent success, not candidate harm.",
+    "noop_replicate_3": "R1 widened the target and changed lower() to casefold(), failing the no-op grader; R1A preserved lower() after a discriminating probe and passed.",
+    "partial_replicates_2_and_3": "R1A made a production normalization change in both replicates and passed, providing no observed passivity signal on the opposing control."
+  },
+  "descriptive_costs": {
+    "R1_total_tool_calls": 51,
+    "R1A_total_tool_calls": 34,
+    "R1_total_wall_time_ms": 112698,
+    "R1A_total_wall_time_ms": 71073,
+    "R1A_tool_call_delta": -17,
+    "R1A_wall_time_delta_ms": -41625
+  },
+  "limitations": [
+    "These are development cases and not a hidden holdout.",
+    "All six stability pairs used one provider/harness family and provider-managed unpinned backend snapshots.",
+    "The no-op and partial cases share one small coding domain and cannot establish cross-domain utility.",
+    "No activation, cross-lingual, portability, controller-locus, primitive-competition, or W5 independent-verifier gate is closed by this result.",
+    "The candidate must remain frozen for fresh selection-validation; hidden prompts must not be derived from these observed failures."
+  ]
+}

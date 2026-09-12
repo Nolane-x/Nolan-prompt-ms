@@ -23,118 +23,142 @@ Maximize **behavioral leverage per token and per unit of controller complexity**
 
 Verified Delta is an incumbent hypothesis, not protected architecture. Utility comes before compression. If no guidance, a smaller controller, an explicit state layer, or an external verifier produces a better behavior/cost frontier, replace or remove the incumbent rather than rescuing familiar prose.
 
-## Current Repository Reality
+## Runtime Reality
 
 - Canonical repository: `Nolane-x/Nolane-prompt-ms`.
-- Current integrated main after runtime-evidence hardening: `71b6b192bae107de339feadceae73ef1fac7115d`.
 - `verified-delta/SKILL.md` remains the single-file runtime package: **446 words**, zero runtime dependencies.
-- Runtime git blob is still `ac48f09ab02eca63e014b4c25f86e492ae5559cb`; the runtime kernel has not been edited during eval infrastructure or the first development trials.
-- Behavioral gates in `EVALS.md` remain OPEN. Three one-replicate development comparisons now exist, but this is not activation, semantic ablation, hidden holdout, cross-domain, or portability proof.
-- CI discovers all tests under `tests/` before running `python verify.py`.
+- Runtime git blob remains `ac48f09ab02eca63e014b4c25f86e492ae5559cb`.
+- The runtime has **not** been edited during eval infrastructure, development U0/U1 trials, or target-authority semantic ablation.
+- Behavioral verification remains OPEN. Development semantic evidence has improved, but selection-validation / hidden holdout, activation, portability, cross-language, controller-locus, primitive competition, and independent W5 verification remain open.
 - Static/infrastructure verification is not behavioral verification.
 
-## Executable U0/U1 Lab
+## Executable Evaluation Boundary
 
-Three intentionally opposing development cases are preregistered:
+Three intentionally opposing development cases remain preregistered in `evals/evals.json`:
 
-1. `username-normalization-noop` — already fixed; unnecessary production change fails.
-2. `username-normalization-partial` — same report, real defect remains; passivity fails and focused change is required.
-3. `false-completion-state` — apparent command success is insufficient; grader re-executes candidate behavior and checks authoritative final state.
+1. `username-normalization-noop` — implementation already satisfies the stated mixed-case/whitespace target; unnecessary production change fails.
+2. `username-normalization-partial` — same report, but a real case-normalization defect remains; passivity fails and production change is required.
+3. `false-completion-state` — apparent command success is insufficient; the grader re-executes candidate behavior in a fresh sandbox and checks authoritative final state.
 
-`eval_harness.py` provides researcher-side `list`, agent-safe `prepare`, out-of-trial `grade`, immutable `record`, and replicate-preserving `summarize`.
+`eval_harness.py` provides agent-safe preparation, out-of-trial grading, immutable receipts, causal run configuration, and fail-closed summaries. Receipts bind evaluator provenance, workspace, transcript, metrics, condition, treatment identity, actual provider-routed model, and actual reasoning effort.
 
-Receipts bind case/condition/pair/replicate, exact skill identity for U1, workspace/transcript/metrics, deterministic grader output, exact evaluator provenance, and validated causal run configuration. Existing receipts cannot be overwritten.
+GitHub Copilot runners use fresh `$RUNNER_TEMP` workspaces, separate `COPILOT_HOME`, one pinned CLI version per pair, restricted tools, no built-in MCPs/custom instructions/remote behavior, programmatic JSONL, actual runtime attestation, and preserved raw artifacts.
 
-`run_config` separates `matched` causal context, `intervention` fields that intentionally differ, and unique `trial` provenance. Summary rejects missing conditions, duplicates, tampered config, evaluator mismatch, or different matched causal context rather than manufacturing a treatment effect.
+Provider snapshots remain `provider-managed-unpinned`; evidence is therefore configuration-scoped rather than proof of an immutable backend snapshot.
 
-## Fresh GitHub Copilot Runner
-
-`.github/workflows/behavioral-u0-u1.yml` is a manual-only `workflow_dispatch` runner. It has now crossed the clean-context boundary in live development trials.
-
-The runner:
-
-- validates dispatch inputs before any Copilot request;
-- resolves one Copilot CLI package version and pins both U0/U1 to it;
-- runs U0 and U1 as separate GitHub-hosted jobs with clean `$RUNNER_TEMP` workspaces and separate `COPILOT_HOME` directories;
-- gives the agent only its prepared fixture and treatment prompt, not the grader or manifest;
-- disables built-in MCPs, custom instructions, experimental/remote behavior, interactive questioning, and unrestricted approval;
-- U0 receives the task prompt only;
-- U1 receives the exact current `verified-delta/SKILL.md` followed by the same task prompt;
-- emits Copilot programmatic JSONL and fails closed on CLI/infrastructure failure;
-- attests the **actual provider-routed model**, **actual reasoning effort**, and observed `tool.execution_start` count from JSONL;
-- binds actual model and actual reasoning into matched run configuration so routing/reasoning mismatch makes a pair non-comparable;
-- writes observed tool-call count into canonical metrics; input/output token metrics remain null until stable cumulative semantics are established;
-- records immutable receipts and preserves raw artifacts even on failure;
-- downloads both raw artifacts and runs `eval_harness.py summarize`, failing closed on missing or non-comparable receipts.
-
-Provider backend snapshots remain declared `provider-managed-unpinned`. Auto routing has already changed across live runs, so all present evidence is configuration-scoped development evidence.
-
-## Live Infrastructure Lessons
-
-The first attempts correctly remained infrastructure-only rather than being misclassified as skill behavior:
-
-- `gpt-5.4` and `claude-sonnet-4.6` named-model attempts were unavailable to the Actions Copilot entitlement and failed before inference.
-- A diagnostic Auto probe succeeded and exposed machine-readable actual-model evidence.
-- The first Auto behavioral attempt with explicit `reasoning_effort=high` failed before inference because Auto rejects explicit reasoning configuration in this harness.
-- PR #16 bound receipts to actual Auto-routed model identity.
-- PR #17 changed Auto runs to omitted/default reasoning and records no claimed explicit effort.
-- PR #18 added runtime attestation so actual reasoning and tool-call counts are now bound from provider JSONL rather than inferred from requested flags.
-
-Relevant hardening evidence includes integration RED `34679719378` and GREEN `34679793029`; PR #18 merged to main and post-merge main verification `34679935151` passed.
-
-## First Completed Development Set
+## First Completed U0/U1 Development Set
 
 Machine-readable evidence is preserved in `evals/development-results-2026-09-12.json`.
 
-| Case | Run | Effect | U0 | U1 | Key observation |
-|---|---:|---|---|---|---|
-| `false-completion-state` | `34679020483` | `same_pass` | PASS, 24.370s | PASS, 35.375s | Both repaired `apply.py` and verified authoritative state. |
-| `username-normalization-noop` | `34679963365` | `same_fail` | FAIL, 11 calls, 17.817s | FAIL, 9 calls, 24.913s | Both manufactured `.lower()` → `.casefold()` despite the stated mixed-case/space behavior already being satisfied. |
-| `username-normalization-partial` | `34679963939` | `same_pass` | PASS, 7 calls, 10.415s | PASS, 7 calls, 12.743s | Both made a necessary focused change. |
+| Case | Run | Effect | Observation |
+|---|---:|---|---|
+| `false-completion-state` | `34679020483` | `same_pass` | Both U0/U1 repaired `apply.py` and verified authoritative state. |
+| `username-normalization-noop` | `34679963365` | `same_fail` | Both widened the already-satisfied target and changed `.lower()` to `.casefold()`. |
+| `username-normalization-partial` | `34679963939` | `same_pass` | Both made a necessary focused normalization change. |
 
-For the two hardened normalization runs, U0 and U1 were genuinely matched at `gpt-5.6-luna`, actual reasoning `medium`, Copilot CLI `1.0.83`, same tool policy and same matched-config hash. The earlier false-completion pair used `mai-code-1.1-flash`; post-hoc JSONL inspection showed actual reasoning `medium`, but that run predates receipt-bound runtime attestation.
+Counts: `u1_gain=0`, `u1_harm=0`, `same_pass=2`, `same_fail=1`.
 
-Development effect counts are therefore:
+Current runtime R1 therefore earned **no measured functional gain** over U0 in this three-case one-replicate development set and was slower in all three observed pairs. This is evidence against deployment confidence, not proof of universal uselessness.
 
-- `u1_gain`: 0
-- `u1_harm`: 0
-- `same_pass`: 2
-- `same_fail`: 1
+The no-op transcript localized the failure: R1 did ground the current implementation and saw that the reported mixed-case/space behavior was already satisfied, but then widened `S*` to Unicode case folding and manufactured a change. “Change minimally” was insufficient because the target had already been enlarged.
 
-There is **no measured functional treatment gain in this three-case, one-replicate development set**. This does not prove universal uselessness, but it is sufficient evidence against claiming that current R1 has earned optimization or deployment confidence.
+## Target-Authority Semantic Candidate
 
-U1 was slower than matched U0 in every development pair: +45.2% false-completion, +39.8% no-op, +22.4% partial. Across these exact three runs the observed wall time is 52.602s U0 versus 73.031s U1, a descriptive +20.429s / +38.8%. Do not turn that heterogeneous Auto-routed sum into a universal score.
+The isolated candidate is `evals/candidates/r1-target-authority.md`, blob `26d93ce346deedccd7186ad5856f849136825ec3`. It is exact R1 plus one semantic sentence:
 
-## No-op Failure Diagnosis
+> **Hold the target boundary.** If observable behavior already satisfies the user-stated target under a discriminating probe and no evidence establishes another required defect, preserve the implementation; do not widen `S*` to justify a change.
 
-The strongest new evidence is not merely that no-op U1 failed; the transcript shows **how** it failed.
+This candidate remains experimental and is **not** the runtime skill.
 
-U1 inspected `app.py`, observed `return value.strip().lower()`, checked the visible project/test surface, and explicitly stated that the reported mixed-case/whitespace symptom was not reproduced. It then widened the target on its own: it redefined the remaining problem as Unicode case-insensitive canonicalization and changed `.lower()` to `.casefold()`.
+`.github/workflows/semantic-ablation.yml` compares R1 versus this R1A candidate in fresh same-run pairs, with actual model/reasoning attestation and fail-closed matched-config comparison.
 
-This means the incumbent was not simply ignored. Its grounding/minimality language changed process, but the controller still lacked sufficient authority over the target boundary. “Change minimally” did not prevent the model from first enlarging `S*` and then making a small change against the enlarged target.
+## Target-Authority Replicate 1
 
-The next semantic hypothesis is therefore:
+The first semantic-ablation pairs on `gpt-5.6-luna`, actual reasoning `medium`, Copilot CLI `1.0.83` were:
 
-> **No-op / target authority:** if current observable behavior already satisfies the user-stated target under a discriminating probe, and no evidence establishes another required defect, do not widen `S*`, upgrade semantics, or repair a latent improvement. A report establishes a hypothesis to test, not proof that code must change.
+- no-op run `34685601912`: R1 FAIL → R1A PASS = `candidate_gain`; calls `8→4`, wall `19.222s→9.850s`;
+- partial run `34685602530`: R1 PASS → R1A PASS = `same_pass`; calls `9→7`, wall `19.782s→12.858s`.
 
-Any candidate must preserve the opposing partial case: when the same report is paired with `return value.strip()`, mixed-case behavior is observably wrong and a production change remains required. This is specifically meant to avoid the known “reproduce before patch” passivity failure mode.
+Raw audit showed R1 widened `.lower()` to `.casefold()` on the no-op case, while R1A preserved `.lower()` after a discriminating probe. On the partial opposing control, R1A still changed production code and passed, so the first pair did not show passivity.
 
-## What the Development Set Does and Does Not Establish
+A single replicate was intentionally not promoted to runtime evidence.
 
-It establishes that:
+## Preregistered Stability Rule
 
-- clean U0/U1 execution is operational;
-- current R1 produced no development-stage functional gain in the three preregistered cases;
-- the intended no-op/action-bias failure persists under U1;
-- U1 added wall-time overhead in all three observed pairs;
-- the no-op failure can be localized to target expansion after successful grounding rather than simple noncompliance.
+Before observing replicates 2 and 3, `evals/target-authority-stability-plan.json` was committed and merged. Frozen plan blob: `180a3a4a9e1c4c96aa07167f9cf8e2c6ab839464`.
 
-It does **not** establish general uselessness, activation prevalence, cross-language behavior, hidden-holdout performance, model portability, or semantic-rule causality. One replicate per case is development evidence, not a final benchmark.
+The candidate would count only as **development-stable** if, across replicates 1–3:
+
+1. partial had zero `candidate_harm`; and
+2. no-op produced `candidate_gain` in at least 2/3 replicates.
+
+Passing this rule explicitly does **not** grant runtime residency. Fresh selection-validation / hidden-holdout evidence remains required.
+
+Candidate wording, grader, harness, tool policy, Auto selector, and omitted/default reasoning selector were frozen for the remaining replicates.
+
+## Target-Authority Stability Result
+
+Machine-readable evidence is preserved in `evals/target-authority-stability-results-2026-09-12.json`.
+
+All six stability pairs were comparable and matched at `gpt-5.6-luna`, actual reasoning `medium`, Copilot CLI `1.0.83`.
+
+| Case | Rep | Run | Effect | R1 | R1A |
+|---|---:|---:|---|---|---|
+| no-op | 1 | `34685601912` | `candidate_gain` | FAIL, 8 calls, 19.222s | PASS, 4 calls, 9.850s |
+| partial | 1 | `34685602530` | `same_pass` | PASS, 9 calls, 19.782s | PASS, 7 calls, 12.858s |
+| no-op | 2 | `34686131240` | `same_pass` | PASS, 6 calls, 15.406s | PASS, 5 calls, 14.380s |
+| partial | 2 | `34686132073` | `same_pass` | PASS, 8 calls, 13.962s | PASS, 5 calls, 10.260s |
+| no-op | 3 | `34686132936` | `candidate_gain` | FAIL, 7 calls, 19.339s | PASS, 5 calls, 11.599s |
+| partial | 3 | `34686133789` | `same_pass` | PASS, 13 calls, 24.987s | PASS, 8 calls, 12.126s |
+
+Preregistered decision inputs:
+
+- no-op `candidate_gain`: **2/3**;
+- no-op `same_pass`: 1/3;
+- partial `candidate_harm`: **0/3**;
+- partial `same_pass`: **3/3**.
+
+Therefore the frozen target-authority sentence **passes the preregistered development-stability rule**.
+
+Raw stability audit strengthens the causal interpretation:
+
+- no-op r2: stochastic incumbent success — both R1 and R1A preserved `.lower()` and passed;
+- no-op r3: R1 again widened the target to `.casefold()` and failed, while R1A preserved `.lower()` after a focused probe and passed;
+- partial r2/r3: R1A actively changed the defective implementation in both runs and passed; no observed passivity signal.
+
+Descriptively across the six exact stability pairs, R1 used 51 observed tool calls and 112.698s wall time versus R1A 34 calls and 71.073s. That is 17 fewer calls and 41.625s less wall time for this development sample only; it is not a universal cost estimate.
+
+### Current semantic conclusion
+
+The target-authority sentence is now a **development-stable semantic candidate under this harness/model configuration**. It has earned progression to fresh selection-validation, not runtime residency.
+
+Do **not** edit `verified-delta/SKILL.md` from this result alone.
+
+## What This Evidence Does and Does Not Establish
+
+It establishes that, in the paired development setup used here:
+
+- R1 has an intermittent target-widening failure on the already-fixed no-op case;
+- the isolated target-authority sentence suppressed that failure in enough preregistered replicates to pass the frozen stability rule;
+- the same sentence did not cause observed passivity on the paired partially-fixed control across three replicates;
+- R1A also used fewer observed tools and less wall time in all six exact R1/R1A stability pairs.
+
+It does **not** establish:
+
+- cross-domain or hidden-holdout utility;
+- natural activation prevalence;
+- cross-language behavior;
+- portability across model/provider/harness families;
+- that the sentence should reside in the umbrella skill rather than a narrower controller;
+- superiority over R0/R2–R8;
+- controller-locus superiority versus explicit state or external gates;
+- W5 r4 independent verification.
 
 ## Controller Hypotheses Still Alive
 
 - `R0` — no guidance.
-- `R1` — current 446-word Verified Delta; now empirically weak on the first development set.
+- `R1` — current 446-word Verified Delta; weak on the original three-case U0/U1 set.
+- `R1A` — R1 plus target-boundary authority; development-stable, not runtime-resident.
 - `R2` — materially compressed Verified Delta.
 - `R3` — compact evidence-gated control loop.
 - `R4` — goal/invariant contract.
@@ -143,11 +167,11 @@ It does **not** establish general uselessness, activation prevalence, cross-lang
 - `R7` — explicit belief/state controller outside raw dialogue history.
 - `R8` — harness-gated controller with external validation/action gates.
 
-No ranking is a result. Do not rescue R1 merely because it is current.
+No ranking is a result. Do not rescue R1A merely because it is the first semantic candidate to show a development gain.
 
 ## W5 Research Boundary
 
-Nolane World 0.12.0 W5 world `world5_0ad739c41440565a1a83` remains blocked at `r4` **Assumption Stress**, which requires a genuinely independent verifier. This context must not self-sign it.
+Nolane World 0.12.0 W5 world `world5_0ad739c41440565a1a83` remains blocked at r4 **Assumption Stress**, which requires a genuinely independent verifier. This context must not self-sign it.
 
 Unresolved question:
 
@@ -155,19 +179,18 @@ Unresolved question:
 
 ## Open Debts
 
-1. **No-op authority semantic hypothesis untested.** It must be tested as a minimal candidate without silently changing other skill semantics.
-2. **Semantic ablation still OPEN.** Current R1 versus a minimal target-authority delta has not been isolated under a same-run causal design.
-3. **Replicates are only n=1 per development case.** Do not interpret the development set as stable rates.
-4. **Provider model snapshot is not immutable.** Auto routing already changed across live experiments.
+1. **Fresh selection-validation / hidden holdout missing.** R1A has passed development stability only.
+2. **Hidden prompts must remain genuinely fresh.** Do not commit or tune against final holdout prompts before execution; preregister source/generation/grading/stopping-rule provenance without exposing task content to the candidate-design loop.
+3. **Cross-domain evidence missing.** Current target-authority evidence is one small coding family.
+4. **Provider model snapshot is not immutable.** Auto routing can change between experiments.
 5. **Independent W5 r4 missing.**
 6. **Primitive competition R0–R8 unexecuted.**
 7. **Controller-locus factorization unexecuted.**
 8. **Activation/natural prevalence unmeasured.**
 9. **Cross-lingual activation unmeasured.**
-10. **Hidden cross-domain/language holdout missing.**
-11. **Runtime portability unmeasured.**
-12. **Umbrella-versus-micro-skill granularity unknown.**
-13. **Myopic-minimality and belief-collapse probes remain unexecuted.**
+10. **Runtime portability unmeasured.**
+11. **Umbrella-versus-micro-skill granularity unknown.**
+12. **Myopic-minimality and belief-collapse probes remain unexecuted.**
 
 ## Rejected Directions
 
@@ -179,19 +202,22 @@ Unresolved question:
 - Optimizing activation metadata before content utility.
 - Crediting prompt text for behavior enforced by a harness.
 - Trusting agent-writable markers as command proof.
-- Calling mismatched U0/U1 receipts a treatment effect.
+- Calling mismatched receipts a treatment effect.
 - Averaging away minority failures.
 - Overwriting old trial receipts.
-- Writing candidate wording from final hidden-holdout failures.
+- Rewriting a candidate after peeking at hidden-holdout failures.
+- Promoting a semantic candidate from one replicate.
+- Treating development-stable as runtime-ready.
 - Splitting the umbrella skill before utility evidence supports it.
-- Dispatching paid/credit-consuming behavioral runs silently.
-- Calling the first three development pairs a final benchmark.
+- Calling the original three development pairs a final benchmark.
 
 ## Next Best Action
 
-Keep `verified-delta/SKILL.md` on `main` unchanged.
+Keep `verified-delta/SKILL.md` unchanged and freeze R1A wording.
 
-Use the development failure only to form a **minimal experimental target-authority candidate**. The candidate should add one general no-op authority semantic and nothing else. Test it against the no-op case while retaining `username-normalization-partial` as an opposing control. Do not promote the candidate to runtime from a development win; semantic ablation and a fresh hidden holdout remain required before residency.
+Design and preregister a **fresh selection-validation / hidden-holdout boundary** that tests target-authority behavior outside the observed normalization family and includes opposing cases where action is genuinely required. Hidden task content must not be committed into the candidate-design surface before execution. The stopping rule, generation/source provenance, grading contract, model/harness matching rules, and contamination boundary should be fixed before any final holdout result is observed.
+
+Only if R1A survives that boundary should runtime residency, micro-skill placement, or broader controller competition be considered.
 
 ## Update Rule
 
