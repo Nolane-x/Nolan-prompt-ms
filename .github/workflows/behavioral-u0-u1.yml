@@ -12,9 +12,9 @@ on:
           - username-normalization-partial
           - false-completion-state
       model:
-        description: Copilot model identifier
+        description: Copilot model identifier or auto
         required: true
-        default: gpt-5.4
+        default: auto
         type: string
       reasoning_effort:
         description: Reasoning effort
@@ -144,6 +144,7 @@ jobs:
             --prompt="$(cat "$TRIAL_ROOT/prompt.txt")" \
             --model="$MODEL_ID" \
             --reasoning-effort="$REASONING_EFFORT" \
+            --output-format=json \
             --available-tools='bash,apply_patch,create,edit,view,glob,grep' \
             --allow-tool='write,shell(python:*)' \
             --disable-builtin-mcps \
@@ -154,7 +155,7 @@ jobs:
             --no-remote-export \
             --no-auto-update \
             --share="$TRIAL_ROOT/transcript.md" \
-            >"$TRIAL_ROOT/copilot.stdout.txt" \
+            >"$TRIAL_ROOT/copilot-events.jsonl" \
             2>"$TRIAL_ROOT/copilot.stderr.txt"
           status=$?
           set -e
@@ -164,8 +165,8 @@ jobs:
 
           if [ ! -f "$TRIAL_ROOT/transcript.md" ]; then
             {
-              echo "# Copilot stdout"
-              cat "$TRIAL_ROOT/copilot.stdout.txt"
+              echo "# Copilot JSONL events"
+              cat "$TRIAL_ROOT/copilot-events.jsonl"
               echo
               echo "# Copilot stderr"
               cat "$TRIAL_ROOT/copilot.stderr.txt"
@@ -205,6 +206,10 @@ jobs:
             exit 1
           fi
 
+          ACTUAL_MODEL_ID=$(python copilot_event_parser.py resolve-model "$TRIAL_ROOT/copilot-events.jsonl")
+          test -n "$ACTUAL_MODEL_ID"
+          printf '%s\n' "$ACTUAL_MODEL_ID" > "$TRIAL_ROOT/actual-model.txt"
+
           python - "$TRIAL_ROOT/metrics.json" "$WALL_TIME_MS" <<'PY'
           import json
           import pathlib
@@ -225,6 +230,7 @@ jobs:
           python - \
             "$TRIAL_ROOT/run-config.json" \
             "$CONDITION" \
+            "$ACTUAL_MODEL_ID" \
             "$MODEL_ID" \
             "$REASONING_EFFORT" \
             "$COPILOT_VERSION" \
@@ -242,7 +248,8 @@ jobs:
           (
               output,
               condition,
-              model_id,
+              actual_model_id,
+              requested_model_id,
               reasoning_effort,
               copilot_version,
               harness_id,
@@ -259,7 +266,8 @@ jobs:
                   "prompt_language": "en",
                   "model": {
                       "provider": "github-copilot-cli",
-                      "id": model_id,
+                      "id": actual_model_id,
+                      "requested": requested_model_id,
                       "snapshot": "provider-managed-unpinned",
                   },
                   "harness": {
@@ -307,7 +315,7 @@ jobs:
             --condition "$CONDITION" \
             --pair-id "$PAIR_ID" \
             --replicate "$REPLICATE" \
-            --model-id "$MODEL_ID" \
+            --model-id "$ACTUAL_MODEL_ID" \
             --harness-id "$HARNESS_ID" \
             --transcript "$TRIAL_ROOT/transcript.md" \
             --metrics "$TRIAL_ROOT/metrics.json" \
