@@ -7,50 +7,22 @@ on:
 
 permissions:
   contents: read
-  copilot-requests: write
+  actions: write
 
 jobs:
-  probe:
+  dispatch:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
-      - name: Install pinned Copilot CLI
-        shell: bash
-        run: npm install -g @github/copilot@1.0.83
-
-      - name: Probe Auto model resolution without repository writes
+      - name: Dispatch attested Auto behavioral pair on main
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/copilot-auto-probe"
-          export COPILOT_HOME="$RUNNER_TEMP/copilot-auto-home"
-          set +e
-          copilot \
-            --prompt='Reply with exactly OK.' \
-            --model=auto \
-            --output-format=json \
-            --available-tools='view' \
-            --no-ask-user \
-            --no-custom-instructions \
-            --no-experimental \
-            --no-remote \
-            --no-remote-export \
-            --no-auto-update \
-            > "$RUNNER_TEMP/copilot-auto-probe/stdout.jsonl" \
-            2> "$RUNNER_TEMP/copilot-auto-probe/stderr.txt"
-          status=$?
-          set -e
-          printf '%s\n' "$status" > "$RUNNER_TEMP/copilot-auto-probe/exit-code.txt"
-          cat "$RUNNER_TEMP/copilot-auto-probe/stdout.jsonl"
-          cat "$RUNNER_TEMP/copilot-auto-probe/stderr.txt" >&2
-          exit "$status"
-
-      - name: Preserve Auto probe evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: copilot-auto-probe-${{ github.run_id }}
-          path: ${{ runner.temp }}/copilot-auto-probe
-          if-no-files-found: error
+          gh workflow run behavioral-u0-u1.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f case_id=false-completion-state \
+            -f model=auto \
+            -f reasoning_effort=high \
+            -f replicate=1
