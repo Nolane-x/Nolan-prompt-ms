@@ -1,5 +1,6 @@
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -187,6 +188,38 @@ class TrialSummaryTests(unittest.TestCase):
                         },
                     )
                     self.assertEqual(pair["replicates"][0]["effect"], "not_comparable")
+
+    def test_summarize_rejects_duplicate_condition_replicate_without_last_file_wins(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            u0_receipt, u1_receipt = self.make_paired_receipts(root)
+            duplicate_u0 = root / "u0-duplicate.json"
+            shutil.copyfile(u0_receipt, duplicate_u0)
+            duplicate_payload = json.loads(duplicate_u0.read_text(encoding="utf-8"))
+            duplicate_payload["grade"]["passed"] = False
+            duplicate_u0.write_text(json.dumps(duplicate_payload), encoding="utf-8")
+
+            result = self.run_harness(
+                "summarize",
+                str(u0_receipt),
+                str(duplicate_u0),
+                str(u1_receipt),
+                "--json",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            pair = json.loads(result.stdout)["pairs"][0]
+            self.assertFalse(pair["comparable"])
+            self.assertTrue(any("duplicate U0" in issue for issue in pair["issues"]))
+            self.assertEqual(
+                pair["counts"],
+                {
+                    "same_fail": 0,
+                    "same_pass": 0,
+                    "u1_gain": 0,
+                    "u1_harm": 0,
+                },
+            )
+            self.assertEqual(pair["replicates"][0]["effect"], "not_comparable")
 
 
 if __name__ == "__main__":
