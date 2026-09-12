@@ -158,6 +158,25 @@ def load_run_config(path: pathlib.Path) -> dict:
     }
 
 
+def validate_run_config_binding(
+    run_config: dict,
+    condition: str,
+    model_id: str,
+    harness_id: str,
+) -> None:
+    value = run_config["value"]
+    matched = value["matched"]
+    if matched["model"]["id"] != model_id:
+        raise ValueError("run config matched.model.id does not match --model-id")
+    if matched["harness"]["id"] != harness_id:
+        raise ValueError("run config matched.harness.id does not match --harness-id")
+    expected_delivery = "none" if condition == "U0" else "force-loaded-skill"
+    if value["intervention"]["delivery_form"] != expected_delivery:
+        raise ValueError(
+            f"run config intervention.delivery_form must be {expected_delivery!r} for {condition}"
+        )
+
+
 def validate_metrics(metrics: object) -> dict:
     if not isinstance(metrics, dict):
         raise ValueError("metrics must be a JSON object")
@@ -335,6 +354,8 @@ def command_record(
 
     metrics = validate_metrics(json.loads(metrics_path.read_text(encoding="utf-8")))
     run_config = load_run_config(run_config_path) if run_config_path is not None else None
+    if run_config is not None:
+        validate_run_config_binding(run_config, condition, model_id, harness_id)
     case_root = CASES / case_id
     eval_provenance = {
         "harness_sha256": sha256_file(HARNESS),
