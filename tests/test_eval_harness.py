@@ -1,3 +1,4 @@
+import hashlib
 import json
 import pathlib
 import subprocess
@@ -169,6 +170,64 @@ class EvalHarnessTests(unittest.TestCase):
             self.assertTrue(payload["passed"])
             self.assertTrue(payload["checks"]["command_invoked"])
             self.assertTrue(payload["checks"]["final_state_enabled"])
+
+    def test_record_u0_trial_binds_grader_transcript_metrics_and_workspace(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            workspace = root / "workspace"
+            self.prepare("username-normalization-noop", workspace)
+            transcript = root / "transcript.txt"
+            transcript.write_text("Inspected current behavior; no production change required.\n", encoding="utf-8")
+            metrics = root / "metrics.json"
+            metrics_payload = {
+                "input_tokens": 120,
+                "output_tokens": 35,
+                "tool_calls": 2,
+                "wall_time_ms": 900,
+            }
+            metrics.write_text(json.dumps(metrics_payload), encoding="utf-8")
+            receipt = root / "receipt.json"
+
+            result = self.run_harness(
+                "record",
+                "username-normalization-noop",
+                str(workspace),
+                str(receipt),
+                "--condition",
+                "U0",
+                "--pair-id",
+                "noop-pair",
+                "--replicate",
+                "1",
+                "--model-id",
+                "fresh-model",
+                "--harness-id",
+                "isolated-harness",
+                "--transcript",
+                str(transcript),
+                "--metrics",
+                str(metrics),
+                "--json",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(json.loads(receipt.read_text(encoding="utf-8")), payload)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["case_id"], "username-normalization-noop")
+            self.assertEqual(payload["condition"], "U0")
+            self.assertEqual(payload["pair_id"], "noop-pair")
+            self.assertEqual(payload["replicate"], 1)
+            self.assertEqual(payload["model_id"], "fresh-model")
+            self.assertEqual(payload["harness_id"], "isolated-harness")
+            self.assertEqual(payload["skill"], {"loaded": False, "sha256": None})
+            self.assertTrue(payload["grade"]["passed"])
+            self.assertEqual(payload["metrics"], metrics_payload)
+            self.assertEqual(
+                payload["transcript"]["sha256"],
+                hashlib.sha256(transcript.read_bytes()).hexdigest(),
+            )
+            self.assertEqual(payload["transcript"]["bytes"], len(transcript.read_bytes()))
+            self.assertEqual(len(payload["workspace_sha256"]), 64)
 
 
 if __name__ == "__main__":
