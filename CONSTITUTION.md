@@ -100,16 +100,26 @@ An outside idea may enter only when it compresses into the Verified Delta primit
 
 A new file requires a distinct loading or maintenance reason. “More organized” is insufficient.
 
+## Utility Before Compression
+
+Compression is an optimization, not an acceptance criterion.
+
+A candidate must first demonstrate useful behavioral effect against a matched no-guidance control. Static word count, elegance, or adherence to a house style cannot substitute for that comparison.
+
+The current **≤ 500 words** target is research pressure, not an Agent Skills requirement and not a deterministic validity gate. A longer candidate may temporarily survive when fresh evidence shows that the added semantics earn their cost; that creates explicit compression debt and must later face ablation. A shorter candidate receives no credit if it loses useful behavior.
+
+Likewise, description wording such as `Use when...` is an activation hypothesis to test, not a static syntax law. Deterministic validation should enforce the external format contract; behavioral evaluation decides which valid wording is useful.
+
 ## Size Pressure
 
-- `verified-delta/SKILL.md`: target **≤ 500 words**.
+- `verified-delta/SKILL.md`: working target **≤ 500 words**, subordinate to demonstrated utility.
 - Supporting runtime prose: add only when an eval proves progressive disclosure is needed.
 - Examples: one excellent example over a catalog.
 - Runtime dependencies: zero unless evaluation demonstrates otherwise.
 
 If an invariant can be checked deterministically, enforce it in `verify.py` instead of spending runtime skill tokens on it.
 
-Crossing a target creates explicit compression debt in `STATE.md`.
+Crossing a target creates explicit compression debt in `STATE.md`; it does not by itself make a candidate invalid.
 
 ## Epistemic Discipline
 

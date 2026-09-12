@@ -8,7 +8,6 @@ import re
 import sys
 
 REQUIRED_ROOT = ("CONSTITUTION.md", "EVALS.md", "STATE.md", "README.md")
-MAX_SKILL_WORDS = 500
 
 
 def fail(errors: list[str], message: str) -> None:
@@ -89,14 +88,12 @@ def verify(root: pathlib.Path) -> tuple[list[str], pathlib.Path | None, int]:
             fail(errors, "SKILL.md frontmatter name violates Agent Skills naming constraints")
         if name != skill_path.parent.name:
             fail(errors, "SKILL.md frontmatter name must match its parent skill directory")
-        if not description.startswith("Use when"):
-            fail(errors, "SKILL.md frontmatter description must start with 'Use when'")
-        if len(description) > 500:
-            fail(errors, "SKILL.md frontmatter description exceeds 500 characters")
+        if not description:
+            fail(errors, "SKILL.md frontmatter description must be non-empty")
+        elif len(description) > 1024:
+            fail(errors, "SKILL.md frontmatter description exceeds 1024 characters")
 
     words = len(skill.split())
-    if words > MAX_SKILL_WORDS:
-        fail(errors, f"SKILL.md has {words} words; limit is {MAX_SKILL_WORDS}")
 
     count_match = re.search(r"\*\*Core skill word count:\*\*\s*(\d+)", state)
     if not count_match:
@@ -130,7 +127,7 @@ def main(argv: list[str]) -> int:
     assert skill_path is not None
     print("PASS")
     print(f"- skill: {skill_path.relative_to(root)}")
-    print(f"- SKILL.md words: {words}/{MAX_SKILL_WORDS}")
+    print(f"- SKILL.md words: {words}")
     return 0
 
 

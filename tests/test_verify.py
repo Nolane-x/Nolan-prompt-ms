@@ -8,10 +8,14 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 VERIFY = ROOT / "verify.py"
 
 
-def skill_text(body: str, name: str = "verified-delta") -> str:
+def skill_text(
+    body: str,
+    name: str = "verified-delta",
+    description: str = "Use when scope drift or false completion can corrupt a task.",
+) -> str:
     return (
         f"---\nname: {name}\n"
-        "description: Use when scope drift or false completion can corrupt a task.\n"
+        f"description: {description}\n"
         f"---\n\n# Verified Delta\n\n{body}\n"
     )
 
@@ -44,8 +48,16 @@ def write_support(
     )
 
 
-def write_project(root: pathlib.Path, body: str, state_count: int, *, name: str = "verified-delta", **gates) -> pathlib.Path:
-    text = skill_text(body, name)
+def write_project(
+    root: pathlib.Path,
+    body: str,
+    state_count: int,
+    *,
+    name: str = "verified-delta",
+    description: str = "Use when scope drift or false completion can corrupt a task.",
+    **gates,
+) -> pathlib.Path:
+    text = skill_text(body, name, description)
     skill_dir = root / "verified-delta"
     skill_dir.mkdir()
     path = skill_dir / "SKILL.md"
@@ -108,15 +120,45 @@ class VerifyTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("directory", result.stdout.lower())
 
-    def test_rejects_more_than_500_skill_words(self):
+    def test_accepts_more_than_500_skill_words_when_state_count_matches(self):
         with tempfile.TemporaryDirectory() as td:
             root = pathlib.Path(td)
             body = "word " * 510
             text = skill_text(body)
             write_project(root, body, count_words(text))
             result = self.run_verify(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_accepts_spec_compliant_description_without_use_when_prefix(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            body = "Ground current truth."
+            description = "Preserves task objectives and verifies state transitions when work is ambiguous or consequential."
+            text = skill_text(body, description=description)
+            write_project(root, body, count_words(text), description=description)
+            result = self.run_verify(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_accepts_description_between_501_and_1024_characters(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            body = "Ground current truth."
+            description = "a" * 700
+            text = skill_text(body, description=description)
+            write_project(root, body, count_words(text), description=description)
+            result = self.run_verify(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_rejects_description_over_1024_characters(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            body = "Ground current truth."
+            description = "a" * 1025
+            text = skill_text(body, description=description)
+            write_project(root, body, count_words(text), description=description)
+            result = self.run_verify(root)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("500", result.stdout)
+            self.assertIn("1024", result.stdout)
 
     def test_rejects_state_word_count_drift(self):
         with tempfile.TemporaryDirectory() as td:
