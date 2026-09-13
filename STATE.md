@@ -7,131 +7,109 @@
 
 ## Boot Sequence
 
-Before modifying this repository: read `CONSTITUTION.md` and all of this file; inspect current `main` and recent PRs; run the full unit suite plus `python verify.py`; re-check stale external/runtime claims; continue from the next evidence-producing action. Past state is recovery evidence, never authority.
+Before modifying this repository: read `CONSTITUTION.md` and all of this file; inspect current `main` and recent PRs/runs; run the full unit suite plus `python verify.py`; treat stored next actions as hypotheses until rechecked against repository/runtime reality.
 
 ## Current Invariant
 
 Maximize **behavioral leverage per token and per unit of controller complexity**. Utility precedes compression. Causality precedes wording. Ablation precedes residency. Verification precedes completion.
 
+Research machinery may temporarily be larger than the runtime package. It must not become a runtime dependency. After the research gates actually close, freeze the evidence and distill the installable distribution to the smallest sufficient agent-facing package instead of shipping the laboratory.
+
 ## Runtime Reality
 
 - Canonical repository: `Nolane-x/Nolane-prompt-ms`.
-- `verified-delta/SKILL.md` remains the single-file runtime package: **446 words**, zero runtime dependencies.
-- Runtime blob remains `ac48f09ab02eca63e014b4c25f86e492ae5559cb`.
-- Runtime R1 is unchanged by target-authority and execution-recovery research.
+- `verified-delta/SKILL.md` remains the single-file runtime kernel: **446 words**, zero runtime dependencies.
+- Runtime R1 blob remains `ac48f09ab02eca63e014b4c25f86e492ae5559cb`.
 - Frozen rejected R1A remains `evals/candidates/r1-target-authority.md`, blob `26d93ce346deedccd7186ad5856f849136825ec3`.
 - **No R1B exists.**
 - Behavioral verification remains OPEN.
-- Provider snapshots remain `provider-managed-unpinned`; actual runtime attestation is authoritative.
+- Provider snapshots remain `provider-managed-unpinned`; actual post-resume runtime attestation is authoritative for behavioral matching.
 
-## R1A Selection Boundary
+## Current Session-Fork Contract
 
-Frozen selection attempt 1, run `34702008909`, produced 11/12 comparable pairs. R1A had zero candidate harm, but **0/4 preserve gains** where at least two were required and only **3/7 comparable act/probe/verify passes**. The one non-comparable verify pair could not repair the frozen conjunctive decision. R1A therefore receives no runtime residency. Consumed selection cases are diagnostic only, never fresh hidden evidence.
+Behavioral development pairs use `copilot-local-session-resume-v3-late-bound-runtime`:
 
-Attempt 2 is excluded because GitHub rerun semantics regenerated the hidden bundle. PR #28 hardened hidden reruns; PR #29 moved supported manual defaults to `auto/default` without treating requested configuration as matched identity.
+1. create one neutral local-only seed session;
+2. freeze and tar the seed home;
+3. verify archive SHA-256;
+4. derive authoritative transported session-state SHA from the decoded tar;
+5. U0/U1 independently restore the same archive and same session ID;
+6. verify pre-treatment state equality;
+7. resume both arms;
+8. attest actual post-resume runtime identity;
+9. admit behavioral comparison only when U0/U1 canonical matched config agrees.
 
-## Fresh Execution-Recovery Development Evidence
+Seed runtime is provenance, not a requirement that post-resume runtime equal the seed. Do not retry provider `auto` until arms happen to match. Do not weaken archive/state gates after an infrastructure mismatch.
 
-PR #30 added four fresh-only cases without changing historical `evals/evals.json`, R1, or R1A:
+## Latest Admissible Development Evidence
 
-1. `execution-recovery-required`
-2. `execution-recovery-noop`
-3. `incidental-artifact-cleanup`
-4. `required-artifact-preserved`
+Fresh late-bound-runtime evidence established both a real signal and unresolved stochasticity:
 
-Replicate 1 evidence is recorded in `evals/execution-recovery-development/results-2026-09-13.json` and merged through PR #31 (`654dca37c484457503161f2d1106ef41eda535e4`). R1/U1 passed all four observed fresh trials. Two pairs were comparable `same_pass`; two were excluded because `auto` routed U0/U1 to different actual model/tool identities. Therefore **no fresh matched R1 failure justified R1B**.
+- `incidental-artifact-cleanup` r6 — run `34739515336`: **comparable `u1_harm`**. U0 passed; U1 used the same matched resumed runtime/config but made zero tool calls and returned `SEED_READY`. This is admissible behavioral evidence.
+- `incidental-artifact-cleanup` r7 — run `34740626669`: **comparable `same_pass`**. The r6 harm did not reproduce.
+- `required-artifact-preserved` r5/r6 evidence with U0/U1 runtime drift is **not comparable** and must not be interpreted as treatment effect.
 
-## Explicit-Model Runtime Lock — Rejected Architecture
+Current hypothesis: R1 may intermittently retain a superseded turn-scoped instruction after a new user target arrives. Status remains **unresolved / stochastic**, not reproduced strongly enough to authorize R1B.
 
-PR #32 (`2f00a60ea049077ce6daf69996ff476bedbbb1a9`) code-verified a preflight that selected a runtime under `auto`, then attempted to call the same exact model/reasoning identity before behavior.
+## Temporal-Authority Pressure Cases — Integrated
 
-Live run `34731153920` rejected that architecture before inference: `auto` attested `mai-code-1.1-flash` at `medium`, but Copilot CLI `1.0.83` rejected the same provider-internal identifier through explicit `--model`. No behavioral trial ran. Do not repair this with retry-until-match.
+PR #38 integrated two purpose-built development cases at merge commit `cac8de133474bca59bc7185b23c01819b7a5c183` without changing R1, R1A, `eval_harness.py`, receipt schema, or the pair summarizer.
 
-## Session-Fork Feasibility and Production Migration
+### `temporal-supersession`
 
-Throwaway feasibility run `34731466073` showed that one local Copilot session could be cloned into isolated U0/U1 homes with identical pre-treatment state and, in that observed run, identical runtime identity. This established infrastructure feasibility only.
+The prior seed-turn restriction is explicitly declared complete. The current task requires reading `challenge.json` and creating exactly one deterministic `answer.json`. The workspace-only grader fails if the agent remains passive, emits stale `SEED_READY`, writes the wrong value, mutates the fixture, or creates extra files.
 
-PR #33 merged the production session-fork architecture as `7a68919677f2e3b37ece65c7ea1cd380999dc559`: neutral seed before treatment, local-only Copilot home, isolated U0/U1 resumes from a common session ID, actual runtime attestation, and matched run-config receipts.
+### `temporal-continuity-control`
 
-## Cross-Runner Failure 1 — Live-State TOCTOU
+The same prior seed-turn restriction is explicitly declared still active while the new target would otherwise require a workspace write. The grader requires the fixture workspace to remain unchanged. This opposes a simplistic repair such as “new turn means discard all prior constraints.”
 
-Fresh cleanup r3 (`34732880632`) and required-artifact r2 (`34732882721`) failed before treatment at the pre-treatment state-hash gate. The transferred artifact and downloaded clones were consistent with each other, while the stored seed hash was stale because it had been computed from the live Copilot home before late session flushes completed. These runs contain zero behavioral evidence.
-
-PR #34 fixed snapshot authority by copying the live Copilot home to an immutable frozen seed before hashing/upload. It merged as `00afe536fcef49090cb93d1d60651b092ddc06d2`; post-merge run `34733316358` was GREEN.
-
-## Cross-Runner Failure 2 — Directory Artifact Representation
-
-Fresh cleanup r4 (`34734044025`) and required-artifact r3 (`34734045527`) proved a second infrastructure boundary. In both runs, the hash stored from the frozen directory differed from the tree reconstructed from the uploaded directory artifact, while the downloaded artifact and trial clone agreed exactly. No treatment inference ran and these runs contain zero behavioral evidence.
-
-The supported repair is representation-preserving transport rather than weakening the state-hash gate.
-
-## Lossless Tar Session Transport — Integrated and Live-Validated
-
-PR #36 replaced direct directory transport with one verified tar representation. The seed job freezes the local Copilot home, creates `frozen-seed-home.tar`, records the archive SHA-256, decodes that same tar locally to derive the authoritative transported session-state hash, and uploads the tar plus metadata. Each trial verifies archive SHA-256 before extraction and then verifies the extracted session-state hash. Stale `inuse.<pid>.lock` ownership markers are excluded from the transport representation. `transport_archive_sha256` is bound into matched run-config provenance.
-
-PR #36 exact head CI was GREEN, it merged as `bf4a12888c0421f61b8e3aa579817c4c4c10ff54`, and post-merge run `34736731996` passed the full unit suite plus `python verify.py`.
-
-Fresh live validation from that exact main revision:
-
-- cleanup r5: run `34736843169`;
-- required-artifact r4: run `34736845884`.
-
-In all four U0/U1 arms, seed artifact download, archive verification, extraction, and **pre-treatment session-state equality all passed**. This closes the previously observed cross-runner representation/hash failure under the observed harness configuration.
-
-Those runs still do **not** count as behavioral evidence: after successful resume/inference, the old receipt gate rejected all arms because provider `auto` had selected `gpt-5.6-luna` for the neutral seed but re-selected `mai-code-1.1-flash` after resume. Within each pair, U0 and U1 matched each other on actual resumed model/reasoning/tool identity; only seed runtime differed. The runs therefore remain infrastructure diagnostics and are consumed.
-
-## Late-Bound Resumed Runtime Matching — Integrated
-
-The causal authority is now split at the correct boundary:
-
-- seed authority: common session ID, exact transport archive SHA-256, exact decoded pre-treatment state hash, and bound seed-runtime provenance;
-- behavioral matched-runtime authority: actual **post-resume U0 versus U1** model, reasoning effort, tool set, harness, and all other `matched` run-config fields.
-
-A resumed arm is no longer rejected merely because its provider-selected runtime differs from the neutral seed runtime. Instead, each arm records its actual resumed runtime in `matched`, while `seed_runtime` remains bound inside `session_fork` provenance. The existing canonical matched-context hash and pair summarizer still fail closed if U0 and U1 differ on resumed runtime identity or any other matched field. This is not retry-until-match and does not weaken archive/state identity.
+Both cases intentionally reuse the same existing seed architecture, so the causal contrast is temporal authority rather than a different seed construction.
 
 TDD/integration evidence:
 
-- RED commit `a809eb14e432662a6a99934d5cd3da4522e6d16f`, run `34737221590`: **99 tests with exactly 1 intended late-bound-runtime contract failure**;
-- exact GREEN production tree `cc4e63f2a397994544a732dc0766d9e121d5119b`: **99/99 tests PASS + `python verify.py` PASS + `git diff --check` PASS**, with exact unchanged R1/R1A blobs;
-- PR #37 exact-head run `34737497541`: GREEN;
-- PR #37 merged as `b3ed2097346e01de160984074c0d34dbb8b9f4b3`;
-- post-merge run `34737526548`: **full unit suite PASS + `python verify.py` PASS**.
+- RED commit `eb8d9e34cdabe179fba7abb48a96d67ec0c273f6`, run `34743316136`: **101 tests with exactly the expected 2 failures + 1 error from missing temporal cases**;
+- exact PR head `79e55f7a826838f3ca9b5957ea35b62201d70c55`, run `34745155079`: full unittest PASS + `python verify.py` PASS;
+- post-merge main run `34745224568`: full unittest PASS + `python verify.py` PASS.
 
-No behavioral result from cleanup r5 or required-artifact r4 is retroactively admitted after this harness change. Fresh replicate identities are required.
+These are code/infrastructure verification only. They are **not** behavioral evidence about R1.
 
 ## Candidate Gate
 
-Keep R1 and R1A unchanged. **Do not create R1B.** A new semantic candidate is allowed only if fresh, comparable, matched-resumed-runtime session-fork evidence exposes a reproducible R1/U1 residual failure with interpretable opposing controls. Infrastructure failures, provider drift between seed and resume, U0/U1 runtime drift, session-resume failures, stale hashes, missing receipts, or non-comparable summaries do not authorize candidate wording.
+Keep R1 and R1A unchanged. **Do not create R1B yet.**
+
+A semantic candidate becomes admissible only if fresh targeted temporal evidence shows an interpretable, sufficiently reproducible R1/U1 residual failure under comparable U0/U1 resumed runtime/config, while the opposing continuity control shows that a proposed repair can distinguish expired constraints from still-active constraints.
+
+Non-comparable pairs, infrastructure failures, seed/resume provider drift by itself, missing receipts, or a single unreproduced stochastic failure do not authorize wording changes.
+
+If a future candidate exists, keep the semantic delta extremely small and derive it from the observed causal failure. It must then face fresh opposing development tests, ablation, and a newly preregistered selection boundary before runtime residency.
+
+## Rejected Directions Worth Preserving
+
+- Bigger rule count or longer prose as a proxy for intelligence.
+- Protecting R1/R1A because effort was invested.
+- Treating CI GREEN as behavioral utility.
+- Calling mismatched receipts a treatment effect.
+- Retrying behavioral/provider outcomes until a desired match appears.
+- Treating provider-internal model IDs as guaranteed public `--model` identifiers.
+- Requiring resumed runtime to equal neutral seed runtime when the causal comparison is U0 versus U1.
+- Sharing one writable resumed session between treatment arms.
+- Weakening archive/state-hash gates after mismatch instead of fixing representation authority.
+- Retroactively admitting behavior from runs that failed the gate active at the time.
+- Reusing consumed hidden/selection evidence as fresh evidence.
+- Creating R1B before fresh matched temporal evidence justifies it.
+- Shipping research harness/evidence as runtime dependency merely because it exists in the research repository.
 
 ## Open Debts
 
-1. Run fresh cleanup r6 and required-artifact r5 under the integrated late-bound-runtime contract; cleanup r5 / required-artifact r4 remain consumed infrastructure diagnostics.
-2. Re-evaluate the previously non-comparable execution-recovery cells only from new matched receipts.
-3. If a candidate eventually exists, test fresh opposing development stability and preregister a completely new selection boundary before any new hidden bundle.
-4. Design a purpose-built exact-bundle repair path before future hidden experiments require same-identity infrastructure repair.
+1. Run fresh replicate 1 for `temporal-supersession` and `temporal-continuity-control`; inspect raw receipts, archive/state/session provenance, actual U0/U1 resumed runtime, matched SHA, and pair summary. Use behavior only when the pair is comparable.
+2. The current workflow-dispatch UI choice list predates the two temporal cases. Resolve the dispatch surface without changing causal semantics, or dispatch through a supported API/CLI path that can supply the registered case IDs. Do not treat inability to launch a run as behavioral evidence.
+3. If targeted temporal harm reproduces, replicate before opening R1B and preserve the continuity opposing control.
+4. Build a purpose-made exact-bundle repair path before another hidden experiment requires same-identity infrastructure repair.
 5. Final cross-domain hidden holdout remains open.
 6. Provider snapshot immutability remains unavailable.
 7. Independent W5 r4 verification remains missing.
 8. Primitive competition R0–R8, controller-locus comparison, natural activation, cross-language activation, portability, umbrella-vs-micro-skill granularity, myopic-minimality, and belief-collapse probes remain open.
-
-## Rejected Directions Worth Preserving
-
-- Bigger is stronger / more rules imply more intelligence.
-- Protecting R1/R1A because effort was invested.
-- Treating CI GREEN as behavioral utility.
-- Calling mismatched receipts a treatment effect.
-- Retrying behavioral failures as infrastructure failures.
-- Reusing consumed selection cases as hidden evidence.
-- Treating `auto` as a matched-model guarantee.
-- Retrying `auto` until arms happen to match.
-- Treating provider-internal model IDs as public `--model` identifiers.
-- Requiring a post-resume runtime to equal the neutral seed runtime when the actual causal comparison is U0 versus U1.
-- Sharing one writable resumed session between treatment arms.
-- Treating session-resume documentation as proof of runtime identity without actual attestation.
-- Dropping or bypassing archive/state-hash gates after mismatch instead of fixing representation authority.
-- Retroactively admitting behavior from runs that failed the then-current infrastructure/receipt gate.
-- Creating R1B before a fresh matched residual R1 failure exists.
-- Promoting development or selection evidence directly to runtime residency.
+9. Final distribution distillation and broad agent installation documentation occur only after the behavioral research boundary closes; do not delete the laboratory early.
 
 ## W5 Boundary
 
@@ -143,10 +121,10 @@ Unresolved research question:
 
 ## Next Best Action
 
-Require GREEN on this STATE commit. Then dispatch `incidental-artifact-cleanup` replicate **6** and `required-artifact-preserved` replicate **5** through `.github/workflows/execution-recovery-development.yml` with `model=auto` and `reasoning_effort=default`.
+First require GREEN on this STATE update. Then obtain **fresh replicate 1** behavioral runs for both temporal pressure cases with `model=auto` and `reasoning_effort=default`.
 
-Interpret behavior only if both arms produce receipts and the pair summary is comparable. The transport archive SHA-256, pre-treatment state hash, session ID, seed provenance, and all U0/U1 matched fields must agree where required. Seed runtime may differ from post-resume runtime, but post-resume U0 and U1 actual model/reasoning/tool identity must match each other through the canonical matched-context gate.
+Do not open R1B from code integration alone. Interpret the temporal hypothesis only from fresh comparable paired receipts; if evidence remains unstable, keep R1 unchanged and continue targeted replication.
 
 ## Update Rule
 
-After each meaningful milestone, replace stale state with current invariants, exact evidence, unresolved obligations, rejected paths worth preserving, and the next evidence-producing action. Do not turn this file into a chronological diary.
+After each meaningful milestone, replace stale state with current invariants, exact evidence, unresolved obligations, rejected paths worth preserving, and the next evidence-producing action. `STATE.md` is a bootloader, not a diary.
