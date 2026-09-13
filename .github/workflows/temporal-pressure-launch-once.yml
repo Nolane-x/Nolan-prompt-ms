@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  required-model-policy-probe:
+  required-model-policy-probe-v2:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -18,12 +18,12 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - name: Resolve first account-accessible authored model fail-closed
+      - name: Resolve first account-accessible authored model with exact CLI 1.0.83 syntax
         shell: bash
         run: |
           set -euo pipefail
           npm install -g "@github/copilot@1.0.83"
-          ROOT="$RUNNER_TEMP/required-model-policy-probe"
+          ROOT="$RUNNER_TEMP/required-model-policy-probe-v2"
           export COPILOT_HOME="$ROOT/copilot-home"
           mkdir -p "$COPILOT_HOME/agents" "$ROOT/workspace"
           cat > "$COPILOT_HOME/settings.json" <<'JSON'
@@ -35,14 +35,14 @@ jobs:
           ---
           name: model-lock
           description: Neutral capability probe with a required authored model policy.
-          models:
+          model:
             - gpt-5.3-codex
             - claude-haiku-4.5
             - gpt-5.4
             - gpt-5.4-mini
             - gemini-3.5-flash
             - gemini-3.6-flash
-          modelPolicy: required
+          model-policy: required
           tools: []
           ---
           Return only the requested literal marker. Do not use tools.
@@ -69,4 +69,37 @@ jobs:
           cat "$ROOT/stderr.txt"
           echo '=== EVENTS ==='
           cat "$ROOT/events.jsonl"
+          python - "$ROOT/events.jsonl" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          authored = {
+              "gpt-5.3-codex",
+              "claude-haiku-4.5",
+              "gpt-5.4",
+              "gpt-5.4-mini",
+              "gemini-3.5-flash",
+              "gemini-3.6-flash",
+          }
+          models = []
+          auto_events = 0
+          for raw in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+              if not raw.strip():
+                  continue
+              event = json.loads(raw)
+              if event.get("type") == "session.auto_mode_resolved":
+                  auto_events += 1
+              if event.get("type") == "model.call_start":
+                  model = event.get("data", {}).get("model")
+                  if isinstance(model, str):
+                      models.append(model)
+          if auto_events:
+              raise SystemExit(f"required model policy unexpectedly used Auto routing: {auto_events} auto events")
+          if len(models) != 1:
+              raise SystemExit(f"expected exactly one model.call_start, got {models!r}")
+          if models[0] not in authored:
+              raise SystemExit(f"selected model escaped authored required list: {models[0]!r}")
+          print(f"LOCKED_MODEL={models[0]}")
+          PY
           exit "$status"
