@@ -7,31 +7,17 @@ on:
       - .github/workflows/temporal-pressure-launch-once.yml
 
 permissions:
-  actions: write
   contents: read
 
 jobs:
-  dispatch:
+  model-surface-probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch fresh temporal pressure replicate 2 on explicit public model
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Inspect exact Copilot CLI model surface without inference
         shell: bash
         run: |
           set -euo pipefail
-          gh workflow run execution-recovery-development.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main \
-            -f case_id=temporal-supersession \
-            -f model=gpt-5.4 \
-            -f reasoning_effort=default \
-            -f replicate=2
-
-          gh workflow run execution-recovery-development.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main \
-            -f case_id=temporal-continuity-control \
-            -f model=gpt-5.4 \
-            -f reasoning_effort=default \
-            -f replicate=2
+          npm install -g "@github/copilot@1.0.83"
+          copilot --version
+          echo '=== COPILOT HELP ==='
+          copilot --help
