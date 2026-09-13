@@ -28,91 +28,72 @@ Verified Delta is an incumbent hypothesis, not protected architecture. Utility p
 - Canonical repository: `Nolane-x/Nolane-prompt-ms`.
 - `verified-delta/SKILL.md` remains the single-file runtime package: **446 words**, zero runtime dependencies.
 - Runtime git blob remains `ac48f09ab02eca63e014b4c25f86e492ae5559cb`.
-- Runtime R1 has not been edited by the target-authority experiments.
+- Runtime R1 has not been edited by the target-authority or execution-recovery experiments.
+- Frozen rejected candidate R1A remains `evals/candidates/r1-target-authority.md`, blob `26d93ce346deedccd7186ad5856f849136825ec3`.
 - Behavioral verification remains OPEN.
-- Provider snapshots remain `provider-managed-unpinned`; runtime attestation, not requested configuration, is authoritative.
+- Provider snapshots remain `provider-managed-unpinned`; actual runtime attestation is authoritative.
 
-## Development Evidence
+## Prior Evidence That Still Matters
 
-The original three-case U0/U1 development set produced `u1_gain=0`, `u1_harm=0`, `same_pass=2`, `same_fail=1`. It exposed an intermittent no-op failure in which R1 enlarged a user-stated normalization target and manufactured a production change.
+The original U0/U1 development set exposed intermittent target widening in the already-satisfied username-normalization case. R1A added one target-authority rule and passed its narrow opposing development-stability boundary, but that did not grant residency.
 
-Frozen candidate R1A remains `evals/candidates/r1-target-authority.md`, blob `26d93ce346deedccd7186ad5856f849136825ec3`. It is exact R1 plus one target-authority sentence. On the opposing normalization development pair, three replicates produced:
+Frozen selection plan `evals/target-authority-selection-plan.json`, blob `1b95c5d3658d56e9aa8f25f699b64c63f3380c2d`, then tested 12 pairs / 24 trials. Valid attempt 1 was run `34702008909` from `main@1a87a0eb6ae4f801b1390c4288a419db28371dcc` with requested `auto/default`; preflight attested `gpt-5.6-luna`, reasoning `medium`, Copilot CLI `1.0.83`.
 
-- no-op: `candidate_gain` 2/3, `same_pass` 1/3;
-- partial: `candidate_harm` 0/3, `same_pass` 3/3.
+Attempt 1 produced 11/12 comparable pairs. R1A had zero candidate harm and passed all four preserve cases, but had **0/4 preserve gains** where at least two were required, and passed only **3/7 comparable act/probe/verify pairs**. One verify pair was not comparable because provider auto-routing changed actual model/tool-set between arms. Even a successful same-identity repair of that pair could not satisfy the frozen conjunctive rule.
 
-R1A therefore passed its preregistered **development-stability** rule. That evidence did not grant runtime residency.
+**Result:** R1A does not pass selection and receives no runtime residency. Its consumed selection cases may be used only as diagnostic material, never again as fresh hidden evidence.
 
-## Frozen Selection Boundary
+Attempt 2 of that run is excluded in full because GitHub rerun semantics regenerated the hidden bundle. PR #28 (`fc8cdd32c93cba02525409e0f5472640d8a61933`) now rejects selection rerun attempts before private seed generation. PR #29 (`2e87aafdb2c7904e674c700e321fc3939c8ece02`) changed manual selection defaults to empirically supported `auto/default`; comparability still uses actual attested runtime identity.
 
-`evals/target-authority-selection-plan.json`, blob `1b95c5d3658d56e9aa8f25f699b64c63f3380c2d`, froze:
+## Localized Mechanism Hypothesis
 
-- R1 blob `ac48f09ab02eca63e014b4c25f86e492ae5559cb`;
-- R1A blob `26d93ce346deedccd7186ad5856f849136825ec3`;
-- six semantic cells × two paired replicates = 12 pairs / 24 model trials;
-- no behavioral early stopping;
-- same-identity retry only for infrastructure failures;
-- decision rule: all 12 pairs comparable, zero candidate harm, R1A passes all 8 act/probe/verify replicates, R1A passes at least 3/4 preserve replicates, and at least 2 candidate gains among the four preserve pairs.
+Forensic analysis of the four preserved comparable R1A failures from attempt 1 found a cross-case pattern broader than target authority:
 
-A pass could have granted only **selection-stable under the observed harness/model configuration; not runtime-resident**.
+- a denied invocation was sometimes treated as evidence that the desired state was impossible even though a materially different permitted execution path remained available;
+- some trials reached the requested target but left incidental files created by probes or failed/intermediate attempts, so the final authoritative tree still failed verification.
 
-## Selection Attempt 1 — R1A Does Not Pass
+The working hypothesis is therefore **execution recovery + transaction closure**: distinguish failure of one invocation from impossibility of the target state; when the target remains unresolved, try a materially different permitted path; before final verification, reconcile incidental mutations while preserving required outputs.
 
-Run `34702008909`, attempt 1, executed from `main@1a87a0eb6ae4f801b1390c4288a419db28371dcc` with requested `model=auto`, `reasoning_effort=default`.
+This is a hypothesis derived from consumed selection evidence. Do **not** edit R1/R1A directly from those cases and do not reuse those cases as hidden evidence.
 
-Preflight succeeded and attested `gpt-5.6-luna`, reasoning `medium`, Copilot CLI `1.0.83`. Only after preflight did the workflow generate and admit the hidden bundle. The attempt-1 hidden bundle was mechanically clean, used seed `selection-78804f4808a765efb13a8081b66cd15ff0c47572f4a803d1854b453d6cc3edd6`, and has artifact SHA-256 `5db178141c5fd532a13e9894bbc64bbb5ee27d5a9fd7d5b482c80b1df989c1f6`.
+## Fresh Execution-Recovery Development Boundary
 
-All 24 arm jobs completed and created immutable receipts. The frozen summary then reported:
+PR #30 merged as `4ec38278ea82e1a32f088bd51c4121b7db828b71` and added a fresh-only development boundary without modifying historical `evals/evals.json`, the old U0/U1 workflow, R1, or R1A.
 
-- 11/12 comparable pairs;
-- candidate harm: 0;
-- R1A preserve passes: 4/4;
-- preserve candidate gains: **0/4** (frozen minimum: 2);
-- R1A passes on comparable act/probe/verify pairs: **3/7**, with four preserved behavioral failures;
-- `verify_authoritative_state-r2` was `not_comparable` because provider auto-routing sent R1 to `mai-code-1.1-flash` with a different actual tool set while R1A routed to `gpt-5.6-luna`.
+Key files:
 
-The formal summary therefore has `infrastructure_valid=false`, because the plan requires 12 comparable pairs. Nevertheless, R1A is already unable to satisfy the frozen conjunctive decision rule from the preserved comparable behavior: all four preserve pairs are fixed `same_pass`, so the required two preserve gains cannot be reached; and four comparable act/probe/verify R1A failures are behavioral results that cannot be retried as infrastructure. Even a successful repair of the one non-comparable verify pair could raise act/probe/verify passes only to 4/8, below the required 8/8.
+- `execution_recovery_development.py` — thin wrapper that reuses `eval_harness.py` while binding fresh manifest/case/harness provenance;
+- `evals/execution-recovery-development/manifest.json` — fresh development manifest;
+- `evals/execution-recovery-development/cases/` — deterministic fixtures and graders;
+- `.github/workflows/execution-recovery-development.yml` — manual paired U0/U1 Copilot runner using `auto/default`, one pinned CLI version, actual runtime attestation, `write,shell(python:*)`, and fail-closed matched-context comparison.
 
-**Result:** R1A does **not** pass the frozen selection-validation boundary and receives **no runtime residency**. Do not retune R1A on these instances. Full machine-readable evidence is in `evals/target-authority-selection-results-2026-09-12.json`.
+The four fresh cases are:
 
-## Excluded Attempt 2 and Rerun Hardening
+1. `execution-recovery-required` — target change is required; the normal helper invocation is outside the allowed shell pattern, while another permitted path can still reach the target.
+2. `execution-recovery-noop` — opposing control; target is already satisfied and unnecessary retry/change fails.
+3. `incidental-artifact-cleanup` — the required command reaches the target but creates incidental staging residue that must be reconciled.
+4. `required-artifact-preserved` — opposing control; generated `bundle.json` and `manifest.json` are required deliverables and over-cleanup fails.
 
-After attempt-1 outcomes were already observed, a GitHub “rerun one matrix job” request unexpectedly restarted the workflow dependency graph, including `generate`, and created a new hidden bundle under run attempt 2. That is not a same-identity infrastructure retry, so attempt 2 remains excluded in full from behavioral evidence.
+The agent-visible recovery prompt does not disclose the recovery mechanism; pressure comes from the tool policy. TDD evidence: RED run `34728626776`, GREEN `34728740561`, anti-leak RED `34728803815` with exactly one intended failure, final branch GREEN `34728843403`, exact PR GREEN `34728867975`, and post-merge GREEN `34728889597`. Final suite: **95 tests + `python verify.py` PASS**.
 
-PR #28 fixed the root cause at the workflow boundary. Merge commit `fc8cdd32c93cba02525409e0f5472640d8a61933` binds `github.run_attempt` in the generation job and rejects any attempt other than `1` before `secrets.token_hex(32)` can create a new selection seed. TDD evidence: run `34702994641` RED on the missing guard, run `34703090924` GREEN after the fix, exact PR run `34703125673` GREEN, and post-merge run `34703148057` GREEN.
+## Candidate Gate
 
-A future same-identity infrastructure repair therefore requires a purpose-built exact-bundle repair path; GitHub workflow/job rerun semantics must not be used for hidden selection evidence.
+**No R1B candidate exists yet.** Do not create one merely because the mechanism sounds plausible.
 
-## Supported Dispatch Default
+First run fresh paired behavioral baselines on all four cases with the current R1 as U1 and no guidance as U0. For each pair, preserve actual model/reasoning/tool-set provenance and reject non-comparable pairs rather than interpreting routing drift as treatment effect.
 
-Two infrastructure-only dispatches established that Copilot CLI `1.0.83` rejected explicit `gpt-5.6-luna` and explicit `gpt-5.4`, while `auto/default` successfully routed and attested actual `gpt-5.6-luna / medium` in the valid selection attempt.
-
-PR #29 therefore changed only the manual selection defaults to `model=auto`, `reasoning_effort=default`. Merge commit `2e87aafdb2c7904e674c700e321fc3939c8ece02`; TDD RED run `34703191937`, GREEN run `34703260382`, exact PR run `34703295763`, and post-merge run `34703320581` are all infrastructure evidence. Actual model/reasoning/tool-set comparability remains fail-closed per arm; `auto` routing is not treated as a promise of identical runtime identity.
-
-## Research Consequence
-
-R1A solved a narrow development target-widening failure but did not generalize into the frozen cross-domain selection boundary. The observed selection cases are no longer hidden. They may be used only as clearly labeled diagnostic/development material and must never be reused as a fresh hidden selection or final holdout.
-
-Current evidence does **not** justify editing R1 from these hidden outcomes. Runtime R1 remains the incumbent only because no replacement has earned residency, not because R1 is proven.
-
-The next useful work is mechanism localization, not more selection reruns. The preserved comparable R1A failures are:
-
-- `act_defect_remains-r2`;
-- `act_explicit_broader_requirement-r2`;
-- `probe_resolvable_ambiguity-r2`;
-- `verify_authoritative_state-r1`.
-
-These failures can inform fresh development probes, but they cannot become a retuned hidden test set.
+Candidate creation is allowed only if fresh evidence exposes a reproducible residual failure that the current R1 does not solve and the opposing controls remain interpretable. If R1 passes all fresh target cases, the present hypothesis has not earned a new runtime sentence; create new fresh probes or abandon/compress the hypothesis instead of manufacturing R1B.
 
 ## Open Debts
 
-1. Localize the four comparable act/probe/verify failures without rewriting R1A on the consumed selection instances.
-2. Formulate any next candidate using fresh development probes, then preregister a new selection boundary before generating new hidden cases.
-3. Design a purpose-built exact-bundle repair workflow before any future experiment needs same-identity infrastructure retries.
-4. Final cross-domain hidden holdout remains open for any future candidate that first passes selection.
-5. Provider snapshot immutability remains unavailable.
-6. Independent W5 r4 verification remains missing.
-7. Primitive competition R0–R8, controller-locus comparison, natural activation, cross-language activation, portability, umbrella-versus-micro-skill granularity, myopic-minimality, and belief-collapse probes remain open.
+1. Run fresh behavioral baseline pairs for all four execution-recovery development cases.
+2. If a fresh residual failure exists, formulate the smallest semantic candidate and test it against opposing fresh controls before any selection experiment.
+3. Preregister a completely new selection boundary and generate a wholly fresh hidden bundle only after a candidate survives fresh development stability.
+4. Design a purpose-built exact-bundle repair path before any future hidden experiment needs same-identity infrastructure retry.
+5. Final cross-domain hidden holdout remains open for any future candidate that first passes selection.
+6. Provider snapshot immutability remains unavailable.
+7. Independent W5 r4 verification remains missing.
+8. Primitive competition R0–R8, controller-locus comparison, natural activation, cross-language activation, portability, umbrella-versus-micro-skill granularity, myopic-minimality, and belief-collapse probes remain open.
 
 ## Rejected Directions Worth Preserving
 
@@ -121,11 +102,13 @@ These failures can inform fresh development probes, but they cannot become a ret
 - Treating CI GREEN as behavioral utility.
 - Calling mismatched receipts a treatment effect.
 - Averaging away minority failures.
-- Retrying behavioral failures as if they were infrastructure failures.
+- Retrying behavioral failures as infrastructure failures.
 - Reusing consumed selection cases as hidden evidence.
-- Rewriting R1A after seeing this selection result and rerunning the same cases as if unseen.
-- Treating a GitHub matrix-job rerun as same-identity evidence when its dependency graph regenerated the hidden bundle.
-- Treating `auto` model routing as a matched-model guarantee.
+- Rewriting R1A after seeing selection outcomes and rerunning those cases as if unseen.
+- Treating a GitHub matrix-job rerun as same-identity evidence when its dependency graph regenerated a hidden bundle.
+- Treating `auto` routing as a matched-model guarantee.
+- Encoding an eval answer in the agent-visible prompt instead of applying pressure through the environment.
+- Creating R1B before fresh development evidence demonstrates a residual failure.
 - Promoting development-stable or selection-stable evidence directly to runtime residency.
 
 ## W5 Boundary
@@ -138,9 +121,7 @@ Unresolved research question:
 
 ## Next Best Action
 
-Keep runtime R1 and frozen R1A wording unchanged.
-
-Inspect the raw attempt-1 artifacts for the four comparable behavioral failures and localize their mechanisms. Convert those mechanisms into **fresh development cases**, not edits tuned against the consumed selection cases. Only after a new semantic candidate survives opposing fresh development probes should a new selection plan be preregistered and a completely fresh hidden bundle generated.
+Keep runtime R1 and frozen R1A unchanged. Dispatch replicate 1 of all four cases through `.github/workflows/execution-recovery-development.yml` with `model=auto` and `reasoning_effort=default`, then inspect immutable receipts and pair summaries. Only fresh behavioral evidence may authorize the next candidate-design step.
 
 ## Update Rule
 
