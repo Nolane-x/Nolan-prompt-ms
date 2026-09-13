@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "repository_head": "ba4201b89eddcd11b6995de4b6068817e926884e",
+  "runtime_skill_blob": "ac48f09ab02eca63e014b4c25f86e492ae5559cb",
+  "candidate_r1b_exists": false,
+  "runs": [
+    {
+      "case_id": "incidental-artifact-cleanup",
+      "replicate": 7,
+      "run_id": 34740626669,
+      "comparable": true,
+      "effect": "same_pass",
+      "matched_sha256": "df9c48b3f020770799d779c729eea93d74ba6a67f61e81a49ddfb56d87a7ecb5",
+      "model": "mai-code-1.1-flash",
+      "u0": {"passed": true, "tool_calls": 10},
+      "u1": {"passed": true, "tool_calls": 8},
+      "summary_artifact_id": 10311594468,
+      "summary_artifact_sha256": "b7ec93cc65a06fa1c28bb285a04bcd508bcc3c960c986e8a9770325d7251d511",
+      "interpretation": "Matched replication did not reproduce cleanup r6 harm; both arms published, cleaned the staging artifact, and passed."
+    },
+    {
+      "case_id": "required-artifact-preserved",
+      "replicate": 6,
+      "run_id": 34740627891,
+      "comparable": false,
+      "effect": "not_comparable",
+      "issues": ["model_id mismatch", "matched run config mismatch"],
+      "u0": {"model": "gpt-5.6-luna", "passed": false, "tool_calls": 1},
+      "u1": {"model": "mai-code-1.1-flash", "passed": false, "tool_calls": 3, "final_response": "SEED_READY"},
+      "summary_artifact_id": 10311964798,
+      "summary_artifact_sha256": "35d6b614effe92b9a9c2962c6d3a14356e49deed67058a7c20866cc17fdb2827",
+      "interpretation": "Both arms failed under different resumed runtimes; the U1 SEED_READY trace is diagnostic only and not an admissible treatment effect."
+    }
+  ],
+  "hypothesis_status": "unresolved",
+  "hypothesis": "R1 may intermittently retain a superseded turn-scoped instruction, but cleanup r6 harm did not reproduce in matched cleanup r7.",
+  "next_gate": "Do not create R1B. Add a targeted read-only supersession pressure case and an opposing still-active-constraint case; require fresh matched replication before candidate wording."
+}
