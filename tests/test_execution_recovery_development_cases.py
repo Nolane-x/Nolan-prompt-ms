@@ -97,6 +97,25 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
         self.assertIn("session fork state hash mismatch", workflow)
         self.assertIn("if: always()", workflow)
 
+    def test_seed_hash_is_bound_to_frozen_uploaded_snapshot(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        seed_index = workflow.index("\n  seed:\n")
+        trial_index = workflow.index("\n  trial:\n")
+        seed_block = workflow[seed_index:trial_index]
+
+        self.assertIn('FROZEN_HOME="$ROOT/frozen-seed-home"', seed_block)
+        self.assertIn('cp -a "$SEED_HOME/." "$FROZEN_HOME/"', seed_block)
+        self.assertIn('FROZEN_SESSION_DIR="$FROZEN_HOME/session-state/$SESSION_ID"', seed_block)
+        self.assertIn(
+            'python - "$FROZEN_SESSION_DIR" "$ROOT/seed-state-hash.txt"',
+            seed_block,
+        )
+        self.assertIn('SEED_SOURCE="$SEED_ROOT/frozen-seed-home"', workflow)
+        self.assertNotIn(
+            'python - "$SESSION_DIR" "$ROOT/seed-state-hash.txt"',
+            seed_block,
+        )
+
     def test_recovery_pressure_comes_from_tool_policy_not_prompt_answer_leakage(self):
         result = self.run_harness("list", "--json")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
