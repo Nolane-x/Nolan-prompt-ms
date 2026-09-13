@@ -249,7 +249,7 @@ jobs:
       MODEL_ID: ${{ inputs.model }}
       REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       REPLICATE: ${{ inputs.replicate }}
-      HARNESS_ID: github-copilot-execution-recovery-dev-v3-tar-session-fork
+      HARNESS_ID: github-copilot-execution-recovery-dev-v4-late-bound-runtime
       GITHUB_TOKEN: ${{ github.token }}
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
@@ -437,23 +437,6 @@ jobs:
             "$TRIAL_ROOT/copilot-events.jsonl" --json \
             > "$TRIAL_ROOT/runtime-attestation.json"
 
-          python - \
-            "$TRIAL_ROOT/seed-attestation.json" \
-            "$TRIAL_ROOT/runtime-attestation.json" <<'PY'
-          import json
-          import pathlib
-          import sys
-
-          seed = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
-          attestation = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
-          if seed["model"] != attestation["model"]:
-              raise SystemExit("session fork runtime mismatch: model")
-          if seed["reasoning_effort"] != attestation["reasoning_effort"]:
-              raise SystemExit("session fork runtime mismatch: reasoning effort")
-          if seed["tool_set"] != attestation["tool_set"]:
-              raise SystemExit("session fork runtime mismatch: tool set")
-          PY
-
           ACTUAL_MODEL_ID=$(python - "$TRIAL_ROOT/runtime-attestation.json" <<'PY'
           import json
           import pathlib
@@ -489,6 +472,7 @@ jobs:
             "$TRIAL_ROOT/run-config.json" \
             "$CONDITION" \
             "$TRIAL_ROOT/runtime-attestation.json" \
+            "$TRIAL_ROOT/seed-attestation.json" \
             "$MODEL_ID" \
             "$COPILOT_VERSION" \
             "$HARNESS_ID" \
@@ -509,6 +493,7 @@ jobs:
               output,
               condition,
               attestation_path,
+              seed_attestation_path,
               requested_model_id,
               copilot_version,
               harness_id,
@@ -521,6 +506,7 @@ jobs:
               transport_archive_sha256,
           ) = sys.argv[1:]
           attestation = json.loads(pathlib.Path(attestation_path).read_text(encoding="utf-8"))
+          seed_attestation = json.loads(pathlib.Path(seed_attestation_path).read_text(encoding="utf-8"))
           is_u1 = condition == "U1"
           payload = {
               "schema_version": 1,
@@ -549,10 +535,15 @@ jobs:
                   "sampling_controls": None,
                   "limits": {"job_timeout_minutes": 10},
                   "session_fork": {
-                      "protocol": "copilot-local-session-resume-v2-tar",
+                      "protocol": "copilot-local-session-resume-v3-late-bound-runtime",
                       "session_id": session_id,
                       "pre_treatment_state_sha256": pre_treatment_state_sha256,
                       "transport_archive_sha256": transport_archive_sha256,
+                      "seed_runtime": {
+                          "model": seed_attestation["model"],
+                          "reasoning_effort": seed_attestation["reasoning_effort"],
+                          "tool_set": seed_attestation["tool_set"],
+                      },
                   },
               },
               "intervention": {
