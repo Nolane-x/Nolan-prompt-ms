@@ -7,57 +7,31 @@ on:
       - .github/workflows/temporal-pressure-launch-once.yml
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
-  sdk-model-catalog-probe:
+  dispatch:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      copilot-requests: write
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - name: List entitlement-aware models through Copilot SDK without inference
+      - name: Dispatch preregistered Auto-router total-system replicate 3
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          npm install -g "@github/copilot@1.0.83"
-          ROOT="$RUNNER_TEMP/sdk-model-catalog-probe"
-          mkdir -p "$ROOT/sdk" "$ROOT/home"
-          export COPILOT_HOME="$ROOT/home"
-          cat > "$COPILOT_HOME/settings.json" <<'JSON'
-          {
-            "remoteExport": false
-          }
-          JSON
-          npm install --prefix "$ROOT/sdk" @github/copilot-sdk
-          export COPILOT_CLI_PATH="$(command -v copilot)"
-          export NODE_PATH="$ROOT/sdk/node_modules"
-          cd "$ROOT/sdk"
-          node --input-type=module <<'NODE'
-          import { CopilotClient } from "@github/copilot-sdk";
+          gh workflow run execution-recovery-development.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f case_id=temporal-supersession \
+            -f model=auto \
+            -f reasoning_effort=default \
+            -f replicate=3
 
-          const client = new CopilotClient({
-            cliPath: process.env.COPILOT_CLI_PATH,
-            gitHubToken: process.env.GITHUB_TOKEN,
-            useLoggedInUser: false,
-            logLevel: "error",
-          });
-          try {
-            await client.start();
-            const models = await client.listModels();
-            console.log(JSON.stringify(models.map((m) => ({
-              id: m.id,
-              name: m.name,
-              policy: m.policy ?? null,
-              billing: m.billing ?? null,
-              capabilities: m.capabilities ?? null,
-            })), null, 2));
-            if (!Array.isArray(models) || models.length === 0) {
-              throw new Error("models.list returned no models");
-            }
-          } finally {
-            await client.stop();
-          }
-          NODE
+          gh workflow run execution-recovery-development.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f case_id=temporal-continuity-control \
+            -f model=auto \
+            -f reasoning_effort=default \
+            -f replicate=3
