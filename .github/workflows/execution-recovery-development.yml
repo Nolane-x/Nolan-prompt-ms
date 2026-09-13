@@ -120,6 +120,7 @@ jobs:
           set -euo pipefail
           ROOT="$RUNNER_TEMP/execution-recovery-seed"
           SEED_HOME="$ROOT/seed-home"
+          FROZEN_HOME="$ROOT/frozen-seed-home"
           WORKSPACE="$ROOT/workspace"
 
           REASONING_ARGS=()
@@ -179,7 +180,13 @@ jobs:
           SESSION_DIR="$SEED_HOME/session-state/$SESSION_ID"
           test -d "$SESSION_DIR"
 
-          python - "$SESSION_DIR" "$ROOT/seed-state-hash.txt" <<'PY'
+          rm -rf "$FROZEN_HOME"
+          mkdir -p "$FROZEN_HOME"
+          cp -a "$SEED_HOME/." "$FROZEN_HOME/"
+          FROZEN_SESSION_DIR="$FROZEN_HOME/session-state/$SESSION_ID"
+          test -d "$FROZEN_SESSION_DIR"
+
+          python - "$FROZEN_SESSION_DIR" "$ROOT/seed-state-hash.txt" <<'PY'
           import hashlib
           import pathlib
           import sys
@@ -242,7 +249,7 @@ jobs:
         run: |
           set -euo pipefail
           SEED_ROOT="$RUNNER_TEMP/execution-recovery-seed-artifact"
-          SEED_SOURCE="$SEED_ROOT/seed-home"
+          SEED_SOURCE="$SEED_ROOT/frozen-seed-home"
           TRIAL_ROOT="$RUNNER_TEMP/execution-recovery-dev"
           COPILOT_HOME="$TRIAL_ROOT/copilot-home"
           mkdir -p "$TRIAL_ROOT" "$COPILOT_HOME"
