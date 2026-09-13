@@ -1,0 +1,350 @@
+name: execution-recovery-session-fork-spike
+
+on:
+  push:
+    branches:
+      - spike/execution-recovery-session-fork
+    paths:
+      - .github/workflows/execution-recovery-session-fork-spike.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      copilot-requests: write
+    env:
+      COPILOT_VERSION: "1.0.83"
+      GITHUB_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Initialize local-only spike state
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/execution-recovery-session-fork-spike"
+          SEED_HOME="$ROOT/seed-home"
+          mkdir -p "$SEED_HOME" "$ROOT/seed-workspace" "$ROOT/u0-workspace" "$ROOT/u1-workspace"
+          cat > "$SEED_HOME/settings.json" <<'JSON'
+          {
+            "remoteExport": false
+          }
+          JSON
+          cat > "$ROOT/verdict.json" <<'JSON'
+          {
+            "passed": false,
+            "status": "pending"
+          }
+          JSON
+
+      - name: Install pinned Copilot CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g "@github/copilot@$COPILOT_VERSION"
+          copilot --version > "$RUNNER_TEMP/execution-recovery-session-fork-spike/copilot-version.txt"
+
+      - name: Create neutral auto seed and fork local session state
+        shell: bash
+        run: |
+          set -u
+          ROOT="$RUNNER_TEMP/execution-recovery-session-fork-spike"
+          SEED_HOME="$ROOT/seed-home"
+          SEED_WORKSPACE="$ROOT/seed-workspace"
+          U0_HOME="$ROOT/u0-home"
+          U1_HOME="$ROOT/u1-home"
+
+          export COPILOT_HOME="$SEED_HOME"
+          set +e
+          copilot \
+            -C "$SEED_WORKSPACE" \
+            --prompt="Return SEED_READY. Do not inspect or modify files." \
+            --model=auto \
+            --output-format=json \
+            --available-tools='bash,create,edit,view,glob,grep' \
+            --allow-tool='write,shell(python:*)' \
+            --disable-builtin-mcps \
+            --no-ask-user \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            > "$ROOT/seed-events.jsonl" \
+            2> "$ROOT/seed.stderr.txt"
+          SEED_STATUS=$?
+          set -e
+          printf '%s\n' "$SEED_STATUS" > "$ROOT/seed.exit-code.txt"
+
+          if [ "$SEED_STATUS" = "0" ]; then
+            python - "$ROOT/seed-events.jsonl" "$ROOT/session-id.txt" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          ids = []
+          for raw in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+              if not raw.strip():
+                  continue
+              event = json.loads(raw)
+              if event.get("type") == "result" and isinstance(event.get("sessionId"), str):
+                  ids.append(event["sessionId"])
+          if len(ids) != 1 or not ids[0].strip():
+              raise SystemExit(f"expected exactly one result.sessionId, found {ids!r}")
+          pathlib.Path(sys.argv[2]).write_text(ids[0] + "\n", encoding="utf-8")
+          PY
+            SESSION_ID=$(cat "$ROOT/session-id.txt")
+            SESSION_DIR="$SEED_HOME/session-state/$SESSION_ID"
+            test -d "$SESSION_DIR"
+            printf '%s\n' "$SESSION_DIR" > "$ROOT/seed-session-dir.txt"
+
+            python copilot_event_parser.py attest-runtime "$ROOT/seed-events.jsonl" --json \
+              > "$ROOT/seed-attestation.json"
+
+            python - "$SESSION_DIR" "$ROOT/pre-seed-hash.txt" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          digest = hashlib.sha256()
+          for path in sorted(p for p in root.rglob("*") if p.is_file()):
+              digest.update(path.relative_to(root).as_posix().encode())
+              digest.update(b"\0")
+              digest.update(hashlib.sha256(path.read_bytes()).digest())
+          pathlib.Path(sys.argv[2]).write_text(digest.hexdigest() + "\n", encoding="utf-8")
+          PY
+
+            mkdir -p "$U0_HOME" "$U1_HOME"
+            cp -a "$SEED_HOME/." "$U0_HOME/"
+            cp -a "$SEED_HOME/." "$U1_HOME/"
+            cp -a "$SEED_WORKSPACE/." "$ROOT/u0-workspace/" 2>/dev/null || true
+            cp -a "$SEED_WORKSPACE/." "$ROOT/u1-workspace/" 2>/dev/null || true
+          fi
+          exit 0
+
+      - name: Resume two isolated pre-treatment forks
+        shell: bash
+        run: |
+          set -u
+          ROOT="$RUNNER_TEMP/execution-recovery-session-fork-spike"
+          SEED_HOME="$ROOT/seed-home"
+          U0_HOME="$ROOT/u0-home"
+          U1_HOME="$ROOT/u1-home"
+          U0_WORKSPACE="$ROOT/u0-workspace"
+          U1_WORKSPACE="$ROOT/u1-workspace"
+
+          if [ ! -s "$ROOT/session-id.txt" ]; then
+            printf '%s\n' 99 > "$ROOT/u0.exit-code.txt"
+            printf '%s\n' 99 > "$ROOT/u1.exit-code.txt"
+            exit 0
+          fi
+          SESSION_ID=$(cat "$ROOT/session-id.txt")
+          test -d "$U0_HOME/session-state/$SESSION_ID" || exit 0
+          test -d "$U1_HOME/session-state/$SESSION_ID" || exit 0
+
+          hash_session() {
+            python - "$1" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          digest = hashlib.sha256()
+          for path in sorted(p for p in root.rglob("*") if p.is_file()):
+              digest.update(path.relative_to(root).as_posix().encode())
+              digest.update(b"\0")
+              digest.update(hashlib.sha256(path.read_bytes()).digest())
+          print(digest.hexdigest())
+          PY
+          }
+
+          hash_session "$U0_HOME/session-state/$SESSION_ID" > "$ROOT/pre-u0-hash.txt"
+          hash_session "$U1_HOME/session-state/$SESSION_ID" > "$ROOT/pre-u1-hash.txt"
+
+          set +e
+          COPILOT_HOME="$U0_HOME" copilot \
+            -C "$U0_WORKSPACE" \
+            --resume="$SESSION_ID" \
+            --prompt="Return CONTROL_READY. Do not inspect or modify files." \
+            --output-format=json \
+            --available-tools='bash,create,edit,view,glob,grep' \
+            --allow-tool='write,shell(python:*)' \
+            --disable-builtin-mcps \
+            --no-ask-user \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            > "$ROOT/u0-events.jsonl" \
+            2> "$ROOT/u0.stderr.txt"
+          U0_STATUS=$?
+          set -e
+          printf '%s\n' "$U0_STATUS" > "$ROOT/u0.exit-code.txt"
+          hash_session "$U0_HOME/session-state/$SESSION_ID" > "$ROOT/post-u0-hash.txt"
+          hash_session "$U1_HOME/session-state/$SESSION_ID" > "$ROOT/u1-after-u0-hash.txt"
+
+          {
+            cat verified-delta/SKILL.md
+            printf '\n\n---\n\nReturn TREATMENT_READY. Do not inspect or modify files.\n'
+          } > "$ROOT/u1-prompt.txt"
+
+          set +e
+          COPILOT_HOME="$U1_HOME" copilot \
+            -C "$U1_WORKSPACE" \
+            --resume="$SESSION_ID" \
+            --prompt="$(cat "$ROOT/u1-prompt.txt")" \
+            --output-format=json \
+            --available-tools='bash,create,edit,view,glob,grep' \
+            --allow-tool='write,shell(python:*)' \
+            --disable-builtin-mcps \
+            --no-ask-user \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            > "$ROOT/u1-events.jsonl" \
+            2> "$ROOT/u1.stderr.txt"
+          U1_STATUS=$?
+          set -e
+          printf '%s\n' "$U1_STATUS" > "$ROOT/u1.exit-code.txt"
+          hash_session "$U1_HOME/session-state/$SESSION_ID" > "$ROOT/post-u1-hash.txt"
+          hash_session "$U0_HOME/session-state/$SESSION_ID" > "$ROOT/u0-after-u1-hash.txt"
+
+          if [ "$U0_STATUS" = "0" ]; then
+            python copilot_event_parser.py attest-runtime "$ROOT/u0-events.jsonl" --json \
+              > "$ROOT/u0-attestation.json" || true
+          fi
+          if [ "$U1_STATUS" = "0" ]; then
+            python copilot_event_parser.py attest-runtime "$ROOT/u1-events.jsonl" --json \
+              > "$ROOT/u1-attestation.json" || true
+          fi
+          exit 0
+
+      - name: Evaluate frozen session-fork feasibility rule
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/execution-recovery-session-fork-spike"
+          python - "$ROOT" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+
+          def read_text(name):
+              path = root / name
+              return path.read_text(encoding="utf-8").strip() if path.exists() else None
+
+          def read_json(name):
+              path = root / name
+              if not path.exists() or not path.read_text(encoding="utf-8").strip():
+                  return None
+              return json.loads(path.read_text(encoding="utf-8"))
+
+          seed_status = read_text("seed.exit-code.txt")
+          u0_status = read_text("u0.exit-code.txt")
+          u1_status = read_text("u1.exit-code.txt")
+          session_id = read_text("session-id.txt")
+          seed = read_json("seed-attestation.json")
+          u0 = read_json("u0-attestation.json")
+          u1 = read_json("u1-attestation.json")
+          pre_seed = read_text("pre-seed-hash.txt")
+          pre_u0 = read_text("pre-u0-hash.txt")
+          pre_u1 = read_text("pre-u1-hash.txt")
+          post_u0 = read_text("post-u0-hash.txt")
+          post_u1 = read_text("post-u1-hash.txt")
+          u1_after_u0 = read_text("u1-after-u0-hash.txt")
+          u0_after_u1 = read_text("u0-after-u1-hash.txt")
+
+          identity_model = bool(seed and u0 and u1) and seed["model"] == u0["model"] == u1["model"]
+          identity_reasoning = bool(seed and u0 and u1) and seed["reasoning_effort"] == u0["reasoning_effort"] == u1["reasoning_effort"]
+          identity_tools = bool(seed and u0 and u1) and seed["tool_set"] == u0["tool_set"] == u1["tool_set"]
+          pre_state_equal = bool(pre_seed and pre_u0 and pre_u1) and pre_u0 == pre_u1 == pre_seed
+          u0_mutated = bool(post_u0 and pre_u0) and post_u0 != pre_u0
+          u1_mutated = bool(post_u1 and pre_u1) and post_u1 != pre_u1
+          branches_diverged = bool(post_u0 and post_u1) and post_u0 != post_u1
+          u1_untouched_by_u0 = bool(u1_after_u0 and pre_u1) and u1_after_u0 == pre_u1
+          u0_untouched_by_u1 = bool(u0_after_u1 and post_u0) and u0_after_u1 == post_u0
+
+          checks = {
+              "seed_succeeded": seed_status == "0",
+              "session_id_present": bool(session_id),
+              "local_seed_state_present": bool(pre_seed),
+              "u0_resume_succeeded": u0_status == "0",
+              "u1_resume_succeeded": u1_status == "0",
+              "model_identity_preserved": identity_model,
+              "reasoning_identity_preserved": identity_reasoning,
+              "tool_set_identity_preserved": identity_tools,
+              "pre_treatment_state_identical": pre_state_equal,
+              "u0_state_mutated_after_resume": u0_mutated,
+              "u1_state_mutated_after_resume": u1_mutated,
+              "fork_histories_diverged": branches_diverged,
+              "u1_untouched_by_u0": u1_untouched_by_u0,
+              "u0_untouched_by_u1": u0_untouched_by_u1,
+          }
+          passed = all(checks.values())
+          payload = {
+              "schema_version": 1,
+              "experiment": "execution-recovery-session-fork-feasibility-v1",
+              "passed": passed,
+              "session_id": session_id,
+              "seed_attestation": seed,
+              "u0_attestation": u0,
+              "u1_attestation": u1,
+              "hashes": {
+                  "pre_seed": pre_seed,
+                  "pre_u0": pre_u0,
+                  "pre_u1": pre_u1,
+                  "post_u0": post_u0,
+                  "post_u1": post_u1,
+                  "u1_after_u0": u1_after_u0,
+                  "u0_after_u1": u0_after_u1,
+              },
+              "checks": checks,
+              "note": "Infrastructure feasibility only; no behavioral evidence or residency claim.",
+          }
+          (root / "verdict.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps(payload, indent=2, sort_keys=True))
+          PY
+
+      - name: Preserve complete spike evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: execution-recovery-session-fork-spike-${{ github.run_id }}
+          path: ${{ runner.temp }}/execution-recovery-session-fork-spike
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce frozen feasibility verdict
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/execution-recovery-session-fork-spike/verdict.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if payload.get("passed") is not True:
+              raise SystemExit("session-fork feasibility rule did not pass")
+          PY
