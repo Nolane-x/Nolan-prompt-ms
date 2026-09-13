@@ -6,8 +6,8 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-HARNESS = ROOT / "eval_harness.py"
-WORKFLOW = ROOT / ".github" / "workflows" / "behavioral-u0-u1.yml"
+HARNESS = ROOT / "execution_recovery_development.py"
+WORKFLOW = ROOT / ".github" / "workflows" / "execution-recovery-development.yml"
 
 FRESH_CASES = [
     "execution-recovery-required",
@@ -37,14 +37,21 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
         payload = json.loads(result.stdout) if result.stdout.strip() else None
         return result, payload
 
-    def test_manifest_and_manual_runner_expose_all_fresh_cases(self):
+    def test_fresh_harness_and_manual_runner_are_isolated_from_historical_manifest(self):
         result = self.run_harness("list", "--json")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         ids = [case["id"] for case in json.loads(result.stdout)["cases"]]
+        self.assertEqual(ids, FRESH_CASES)
+
+        historical = json.loads((ROOT / "evals" / "evals.json").read_text(encoding="utf-8"))
+        historical_ids = [case["id"] for case in historical["cases"]]
         for case_id in FRESH_CASES:
-            self.assertIn(case_id, ids)
+            self.assertNotIn(case_id, historical_ids)
 
         workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("condition: [U0, U1]", workflow)
+        self.assertIn("execution_recovery_development.py", workflow)
         for case_id in FRESH_CASES:
             self.assertIn(f"- {case_id}", workflow)
 
@@ -56,6 +63,7 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertFalse(payload["passed"])
             self.assertFalse(payload["checks"]["target_reached"])
+
             rollout = workspace / "rollout.json"
             state = json.loads(rollout.read_text(encoding="utf-8"))
             state["channel"] = "stable"
@@ -74,6 +82,7 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue(payload["passed"])
             self.assertTrue(payload["checks"]["production_unchanged"])
+
             (workspace / "attempt.txt").write_text("unnecessary retry\n", encoding="utf-8")
             result, payload = self.grade("execution-recovery-noop", workspace)
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
@@ -90,6 +99,7 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertTrue(payload["checks"]["target_reached"])
             self.assertFalse(payload["checks"]["no_incidental_artifact"])
+
             (workspace / "staged-release.json").unlink()
             result, payload = self.grade("incidental-artifact-cleanup", workspace)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -104,6 +114,7 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
             result, payload = self.grade("required-artifact-preserved", workspace)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue(payload["checks"]["required_manifest_present"])
+
             (workspace / "manifest.json").unlink()
             result, payload = self.grade("required-artifact-preserved", workspace)
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
