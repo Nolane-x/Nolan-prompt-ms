@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  required-model-policy-probe-v2:
+  sdk-model-catalog-probe:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -18,88 +18,46 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - name: Resolve first account-accessible authored model with exact CLI 1.0.83 syntax
+      - name: List entitlement-aware models through Copilot SDK without inference
         shell: bash
         run: |
           set -euo pipefail
           npm install -g "@github/copilot@1.0.83"
-          ROOT="$RUNNER_TEMP/required-model-policy-probe-v2"
-          export COPILOT_HOME="$ROOT/copilot-home"
-          mkdir -p "$COPILOT_HOME/agents" "$ROOT/workspace"
+          ROOT="$RUNNER_TEMP/sdk-model-catalog-probe"
+          mkdir -p "$ROOT/sdk" "$ROOT/home"
+          export COPILOT_HOME="$ROOT/home"
           cat > "$COPILOT_HOME/settings.json" <<'JSON'
           {
             "remoteExport": false
           }
           JSON
-          cat > "$COPILOT_HOME/agents/model-lock.agent.md" <<'AGENT'
-          ---
-          name: model-lock
-          description: Neutral capability probe with a required authored model policy.
-          model:
-            - gpt-5.3-codex
-            - claude-haiku-4.5
-            - gpt-5.4
-            - gpt-5.4-mini
-            - gemini-3.5-flash
-            - gemini-3.6-flash
-          model-policy: required
-          tools: []
-          ---
-          Return only the requested literal marker. Do not use tools.
-          AGENT
-          set +e
-          copilot \
-            -C "$ROOT/workspace" \
-            --agent=model-lock \
-            --prompt='Return exactly MODEL_READY.' \
-            --output-format=json \
-            --disable-builtin-mcps \
-            --no-ask-user \
-            --no-custom-instructions \
-            --no-experimental \
-            --no-remote \
-            --no-remote-export \
-            --no-auto-update \
-            > "$ROOT/events.jsonl" \
-            2> "$ROOT/stderr.txt"
-          status=$?
-          set -e
-          echo "probe_exit_code=$status"
-          echo '=== STDERR ==='
-          cat "$ROOT/stderr.txt"
-          echo '=== EVENTS ==='
-          cat "$ROOT/events.jsonl"
-          python - "$ROOT/events.jsonl" <<'PY'
-          import json
-          import pathlib
-          import sys
+          npm install --prefix "$ROOT/sdk" @github/copilot-sdk
+          export COPILOT_CLI_PATH="$(command -v copilot)"
+          export NODE_PATH="$ROOT/sdk/node_modules"
+          cd "$ROOT/sdk"
+          node --input-type=module <<'NODE'
+          import { CopilotClient } from "@github/copilot-sdk";
 
-          authored = {
-              "gpt-5.3-codex",
-              "claude-haiku-4.5",
-              "gpt-5.4",
-              "gpt-5.4-mini",
-              "gemini-3.5-flash",
-              "gemini-3.6-flash",
+          const client = new CopilotClient({
+            cliPath: process.env.COPILOT_CLI_PATH,
+            gitHubToken: process.env.GITHUB_TOKEN,
+            useLoggedInUser: false,
+            logLevel: "error",
+          });
+          try {
+            await client.start();
+            const models = await client.listModels();
+            console.log(JSON.stringify(models.map((m) => ({
+              id: m.id,
+              name: m.name,
+              policy: m.policy ?? null,
+              billing: m.billing ?? null,
+              capabilities: m.capabilities ?? null,
+            })), null, 2));
+            if (!Array.isArray(models) || models.length === 0) {
+              throw new Error("models.list returned no models");
+            }
+          } finally {
+            await client.stop();
           }
-          models = []
-          auto_events = 0
-          for raw in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
-              if not raw.strip():
-                  continue
-              event = json.loads(raw)
-              if event.get("type") == "session.auto_mode_resolved":
-                  auto_events += 1
-              if event.get("type") == "model.call_start":
-                  model = event.get("data", {}).get("model")
-                  if isinstance(model, str):
-                      models.append(model)
-          if auto_events:
-              raise SystemExit(f"required model policy unexpectedly used Auto routing: {auto_events} auto events")
-          if len(models) != 1:
-              raise SystemExit(f"expected exactly one model.call_start, got {models!r}")
-          if models[0] not in authored:
-              raise SystemExit(f"selected model escaped authored required list: {models[0]!r}")
-          print(f"LOCKED_MODEL={models[0]}")
-          PY
-          exit "$status"
+          NODE
