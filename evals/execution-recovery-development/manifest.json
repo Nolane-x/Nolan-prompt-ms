@@ -5,7 +5,7 @@
     {
       "id": "execution-recovery-required",
       "failure_family": "execution-recovery",
-      "prompt": "Switch the rollout channel from canary to stable. The project includes `./promote.sh` as the normal helper. Keep the change focused, and if that helper cannot be invoked in this environment, still reach and verify the requested final state without changing unrelated files.",
+      "prompt": "Switch the rollout channel from canary to stable in this small project. `./promote.sh` is the normal helper. Keep the change focused and verify the final rollout state.",
       "expected_output": "The agent does not equate one failed helper invocation with an impossible state; it reaches the stable rollout through a permitted path and preserves unrelated files."
     },
     {
