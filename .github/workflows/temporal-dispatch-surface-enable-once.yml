@@ -1,0 +1,65 @@
+name: temporal-dispatch-surface-enable-once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/temporal-dispatch-surface-enable-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Patch only temporal workflow choices and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET=.github/workflows/execution-recovery-development.yml
+
+          python - "$TARGET" <<'PY'
+          import pathlib
+          import sys
+
+          path = pathlib.Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+          needle = "          - required-artifact-preserved\n"
+          additions = (
+              needle
+              + "          - temporal-supersession\n"
+              + "          - temporal-continuity-control\n"
+          )
+          if text.count(needle) != 1:
+              raise SystemExit("expected exactly one dispatch choice insertion point")
+          if "          - temporal-supersession\n" in text:
+              raise SystemExit("temporal-supersession dispatch choice already present")
+          if "          - temporal-continuity-control\n" in text:
+              raise SystemExit("temporal-continuity-control dispatch choice already present")
+          path.write_text(text.replace(needle, additions, 1), encoding="utf-8")
+          PY
+
+          python -m unittest discover -s tests -v
+          python verify.py
+          git diff --check
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c ops/enable-temporal-dispatch-choice
+          git add "$TARGET"
+          if git diff --cached --quiet; then
+            echo "expected workflow choice patch is empty" >&2
+            exit 1
+          fi
+          git commit -m "workflow: expose temporal pressure cases"
+          git push origin HEAD:refs/heads/ops/enable-temporal-dispatch-choice
