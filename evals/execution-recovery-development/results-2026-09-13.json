@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "experiment": "execution-recovery-development-baseline-r1",
+  "evidence_class": "fresh-development",
+  "source": {
+    "repository": "Nolane-x/Nolane-prompt-ms",
+    "head_sha": "c605ddcd36b5f628d385cdbd60b0c3985c3fde95",
+    "workflow": ".github/workflows/execution-recovery-development.yml",
+    "requested_model": "auto",
+    "requested_reasoning_effort": "default",
+    "copilot_cli": "GitHub Copilot CLI 1.0.83.",
+    "replicate": 1
+  },
+  "runtime_treatment": {
+    "condition": "U1",
+    "skill_path": "verified-delta/SKILL.md",
+    "skill_content_sha256": "81f44a454bf00d61a172217864114b71e9792a4247b7f4459633f7b5deb3c5a9",
+    "runtime_git_blob": "ac48f09ab02eca63e014b4c25f86e492ae5559cb",
+    "runtime_word_count": 446
+  },
+  "aggregate": {
+    "fresh_cases": 4,
+    "r1_u1_passes_observed": 4,
+    "r1_u1_failures_observed": 0,
+    "comparable_pairs": 2,
+    "comparable_same_pass": 2,
+    "comparable_u1_gain": 0,
+    "comparable_u1_harm": 0,
+    "non_comparable_pairs": 2,
+    "candidate_gate_triggered": false
+  },
+  "cases": [
+    {
+      "case_id": "execution-recovery-required",
+      "run_id": 34729442908,
+      "pair_effect": "same_pass",
+      "comparable": true,
+      "issues": [],
+      "u0": {
+        "passed": true,
+        "actual_model": "mai-code-1.1-flash",
+        "reasoning_effort": "medium",
+        "tool_set": ["bash", "create", "edit", "glob", "grep", "view"],
+        "tool_calls": 12,
+        "wall_time_ms": 41630,
+        "matched_sha256": "b4a1a5da0c167a987e87301543f04a0bc8a95aef8d809bdac305919d5c40bb29",
+        "artifact_id": 10308893041,
+        "artifact_digest": "sha256:d274904768cda879d76862b06937fc2665b0fc678ed2065302258459aa19caf9"
+      },
+      "u1": {
+        "passed": true,
+        "actual_model": "mai-code-1.1-flash",
+        "reasoning_effort": "medium",
+        "tool_set": ["bash", "create", "edit", "glob", "grep", "view"],
+        "tool_calls": 15,
+        "wall_time_ms": 48744,
+        "matched_sha256": "b4a1a5da0c167a987e87301543f04a0bc8a95aef8d809bdac305919d5c40bb29",
+        "artifact_id": 10308243047,
+        "artifact_digest": "sha256:18337d78980fea755285555952150377d1d182bc9663f8bb169b086a4b49bd5a"
+      },
+      "summary_artifact": {
+        "id": 10308208134,
+        "digest": "sha256:665e75a1df072e4176d54e33b627118b6ae50514ef3fa88aecb958f7731d62ce",
+        "status": "valid"
+      }
+    },
+    {
+      "case_id": "execution-recovery-noop",
+      "run_id": 34729444632,
+      "pair_effect": "same_pass",
+      "comparable": true,
+      "issues": [],
+      "u0": {
+        "passed": true,
+        "actual_model": "mai-code-1.1-flash",
+        "reasoning_effort": "medium",
+        "tool_set": ["bash", "create", "edit", "glob", "grep", "view"],
+        "tool_calls": 4,
+        "wall_time_ms": 10304,
+        "matched_sha256": "b4a1a5da0c167a987e87301543f04a0bc8a95aef8d809bdac305919d5c40bb29",
+        "artifact_id": 10308882869,
+        "artifact_digest": "sha256:544a48710b94dc1f5b0813a5fed7de20cbe7aed2dd5bd9d833934447252de06f"
+      },
+      "u1": {
+        "passed": true,
+        "actual_model": "mai-code-1.1-flash",
+        "reasoning_effort": "medium",
+        "tool_set": ["bash", "create", "edit", "glob", "grep", "view"],
+        "tool_calls": 5,
+        "wall_time_ms": 13970,
+        "matched_sha256": "b4a1a5da0c167a987e87301543f04a0bc8a95aef8d809bdac305919d5c40bb29",
+        "artifact_id": 10308613552,
+        "artifact_digest": "sha256:a64596fd2f23700c00d091c35359f002f9568e4ba7fb5e1fbd9ef84e74625631"
+      },
+      "summary_artifact": {
+        "id": 10309132368,
+        "digest": "sha256:15b535ab6ef87d0672babab858cd57711db5e6e18850c05cbc4e23014c006b89",
+        "status": "valid"
+      }
+    },
+    {
+      "case_id": "incidental-artifact-cleanup",
+      "run_id": 34729446329,
+      "pair_effect": "not_comparable",
+      "comparable": false,
+      "issues": [
+        "replicate 1 model_id mismatch",
+        "replicate 1 matched run config mismatch"
+      ],
+      "u0": {
+        "passed": false,
+        "actual_model": "gpt-5.6-luna",
+        "reasoning_effort": "medium",
+        "tool_set": ["bash", "glob", "rg", "view"],
+        "tool_calls": 18,
+        "wall_time_ms": 38318,
+        "matched_sha256": "4da409651d38782af01599c10b2c9c3a581640f19d0648650b7bf530e7e48d5a",
+        "artifact_id": 10309127421,
+        "artifact_digest": "sha256:c20fd23ea40e7e22390dde8208f3f5b06fc3b5b7e5c4601c0684e597ab391ccb",
+        "diagnostic": "Target state was reached but staged-release.json remained, so exact-tree and no-incidental-artifact checks failed."
+      },
+      "u1": {
+        "passed": true,
+        "actual_model": "mai-code-1.1-flash",
+        "reasoning_effort": "medium",
+        "tool_set": ["bash", "create", "edit", "glob", "grep", "view"],
+        "tool_calls": 14,
+        "wall_time_ms": 115053,
+        "matched_sha256": "b4a1a5da0c167a987e87301543f04a0bc8a95aef8d809bdac305919d5c40bb29",
+        "artifact_id": 10309022835,
+        "artifact_digest": "sha256:7fb3c0dc3f66bbf641c6d7c924b61dfdb12f1f2e57dc71163e02ba6f12e10ec6",
+        "diagnostic": "Target state was reached, transient staged-release.json was removed, and the final tree passed."
+      },
+      "summary_artifact": {
+        "id": 10308848069,
+        "digest": "sha256:e420fb0c086f8c5db4540f1ab00362133a97f5fe7d0b5424fa288a16d553c463",
+        "status": "fail_closed_not_comparable"
+      },
+      "causal_interpretation": "none; the apparent U1 improvement is diagnostic only because actual model and tool set differ between arms"
+    },
+    {
+      "case_id": "required-artifact-preserved",
+      "run_id": 34729447895,
+      "pair_effect": "not_comparable",
+      "comparable": false,
+      "issues": [
+        "replicate 1 model_id mismatch",
+        "replicate 1 matched run config mismatch"
+      ],
+      "u0": {
+        "passed": true,
+        "actual_model": "gpt-5.6-luna",
+        "reasoning_effort": "medium",
+        "tool_set": ["bash", "glob", "rg", "view"],
+        "tool_calls": 3,
+        "wall_time_ms": 7001,
+        "matched_sha256": "4da409651d38782af01599c10b2c9c3a581640f19d0648650b7bf530e7e48d5a",
+        "artifact_id": 10309197291,
+        "artifact_digest": "sha256:b8661a6d2c44e79a3c0e0e406cde0961fc74b9ac4b1e4124166fcb37c50e89f6"
+      },
+      "u1": {
+        "passed": true,
+        "actual_model": "mai-code-1.1-flash",
+        "reasoning_effort": "medium",
+        "tool_set": ["bash", "create", "edit", "glob", "grep", "view"],
+        "tool_calls": 5,
+        "wall_time_ms": 10420,
+        "matched_sha256": "b4a1a5da0c167a987e87301543f04a0bc8a95aef8d809bdac305919d5c40bb29",
+        "artifact_id": 10309117476,
+        "artifact_digest": "sha256:43cf53be77583d0852aa902138a4b66cff681396f251d189789679d477112b4b"
+      },
+      "summary_artifact": {
+        "id": 10308758238,
+        "digest": "sha256:bd53b891ac9c5183e4e245eb0cda9e41d488816dda3cf38e4a5be4d16d18c927",
+        "status": "fail_closed_not_comparable"
+      },
+      "causal_interpretation": "none; both arms passed but actual model and tool set differ"
+    }
+  ],
+  "decision": {
+    "r1b_candidate_created": false,
+    "reason": "No fresh R1/U1 behavioral failure was observed. Both comparable pairs were same_pass, while the two remaining pairs were excluded from causal interpretation because provider auto-routing changed actual model/tool-set identity.",
+    "next_boundary": "Do not manufacture R1B from this baseline. Either obtain additional fresh matched development evidence, or shift effort to provider-comparability / exact-identity infrastructure before any new candidate wording."
+  },
+  "limitations": [
+    "This is development evidence, not a preregistered selection or final holdout.",
+    "Provider snapshots are unpinned and auto routing changed actual model/tool-set identity in two of four pairs.",
+    "A U1 pass in a non-comparable pair is descriptive evidence of observed R1 behavior, not a causal treatment estimate.",
+    "No conclusion of runtime verification, convergence, or behavioral completion is authorized."
+  ]
+}
