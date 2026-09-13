@@ -99,29 +99,41 @@ Aggregate causal result from comparable pairs: `same_pass=2`, `u1_gain=0`, `u1_h
 
 The execution-recovery hypothesis remains plausible diagnostic theory, but the current R1 already exhibited the desired behavior in every observed U1 fresh trial.
 
+## Development Runtime-Lock Hardening
+
+To address provider routing drift without rerunning until a pair happens to match, `.github/workflows/execution-recovery-development.yml` now has a code-verified preflight lock at implementation revision `7cf1502fc041e4ef27fd5072f89aecf80986d465`.
+
+Before any fresh case is prepared, the preflight:
+
+1. runs a neutral prompt with the dispatch request and attests the provider-selected model, reasoning effort, and tool set;
+2. re-invokes that exact attested model ID and reasoning effort with the same tool policy;
+3. refuses behavioral trials unless the second attestation matches model, reasoning, and tool set exactly;
+4. passes the locked model/reasoning identity to both U0/U1 arms and requires each arm's own attestation to equal the lock before an immutable receipt is written;
+5. always preserves a model-lock artifact, including failed infrastructure attempts.
+
+TDD evidence: RED run `34729862495` ran **97 tests with exactly the two intended model-lock contract failures**; implementation run `34729941644` ran **97/97 tests PASS + `python verify.py` PASS**. The runtime skill remained 446 words.
+
+This is **static/code verification only**. No live provider dispatch has yet established that a provider-selected runtime can actually be re-invoked by exact ID under this workflow. Failure of that live lock is an infrastructure result and must produce no behavioral interpretation.
+
 ## Current Research Boundary
 
-The immediate blocker is now **causal comparability**, not missing candidate wording.
+The immediate blocker remains **causal comparability**, not missing candidate wording.
 
-Two of four fresh pairs were unusable causally because `auto` routed U0 to `gpt-5.6-luna` and U1 to `mai-code-1.1-flash`. The harness correctly failed closed. Do not reinterpret those pairs as gains or harms and do not use GitHub rerun semantics as same-identity evidence.
+The baseline lost two of four pairs because `auto` routed U0 to `gpt-5.6-luna` and U1 to `mai-code-1.1-flash`. The new model-lock boundary is designed to stop that before behavior, but it is not empirically established until a live dispatch runs from the merged workflow.
 
-Before any new candidate is justified, choose one of these evidence-producing directions:
-
-1. obtain additional **fresh development replicates** until the execution-recovery/transaction-closure cases have matched actual runtime identity, preserving all attempts and never replacing mismatches after the fact; or
-2. build and validate a purpose-built matched-identity / exact-bundle repair mechanism that does not regenerate hidden evidence and does not pretend `auto` guarantees model identity.
-
-A new semantic candidate is allowed only if fresh evidence exposes a reproducible R1 residual failure with interpretable opposing controls.
+A new semantic candidate is allowed only if fresh **matched-runtime** evidence exposes a reproducible R1 residual failure with interpretable opposing controls. A model-lock failure, provider rejection of an exact model ID, or arm drift from the lock is infrastructure evidence only.
 
 ## Open Debts
 
-1. Resolve provider-comparability for the two non-comparable fresh development cells without calling their current mismatched outcomes treatment effects.
-2. Do not formulate R1B unless new fresh development evidence demonstrates a reproducible R1/U1 residual failure.
-3. If a candidate eventually exists, test fresh opposing development stability, then preregister a completely new selection boundary before generating a wholly fresh hidden bundle.
-4. Design a purpose-built exact-bundle repair path before any future hidden experiment needs same-identity infrastructure retry.
-5. Final cross-domain hidden holdout remains open for any future candidate that first passes selection.
-6. Provider snapshot immutability remains unavailable.
-7. Independent W5 r4 verification remains missing.
-8. Primitive competition R0–R8, controller-locus comparison, natural activation, cross-language activation, portability, umbrella-versus-micro-skill granularity, myopic-minimality, and belief-collapse probes remain open.
+1. Live-validate the development runtime lock on a new fresh replicate and preserve its model-lock artifact; if it succeeds, use only exact matched receipts as behavioral evidence.
+2. Resolve the two previously non-comparable fresh development cells without calling their mismatched replicate-1 outcomes treatment effects.
+3. Do not formulate R1B unless new fresh matched development evidence demonstrates a reproducible R1/U1 residual failure.
+4. If a candidate eventually exists, test fresh opposing development stability, then preregister a completely new selection boundary before generating a wholly fresh hidden bundle.
+5. Design a purpose-built exact-bundle repair path before any future hidden experiment needs same-identity infrastructure retry.
+6. Final cross-domain hidden holdout remains open for any future candidate that first passes selection.
+7. Provider snapshot immutability remains unavailable.
+8. Independent W5 r4 verification remains missing.
+9. Primitive competition R0–R8, controller-locus comparison, natural activation, cross-language activation, portability, umbrella-versus-micro-skill granularity, myopic-minimality, and belief-collapse probes remain open.
 
 ## Rejected Directions Worth Preserving
 
@@ -138,6 +150,7 @@ A new semantic candidate is allowed only if fresh evidence exposes a reproducibl
 - Encoding an eval answer in the agent-visible prompt instead of applying pressure through the environment.
 - Creating R1B before fresh development evidence demonstrates a residual failure.
 - Calling the mismatched `incidental-artifact-cleanup` result a U1 gain.
+- Treating code-verified runtime locking as live provider proof.
 - Promoting development-stable or selection-stable evidence directly to runtime residency.
 
 ## W5 Boundary
@@ -152,7 +165,7 @@ Unresolved research question:
 
 Keep runtime R1 and frozen R1A unchanged. Do **not** create R1B.
 
-Produce matched fresh development evidence for the two cells lost to auto-routing drift, or first harden the development infrastructure so same-identity evidence can be obtained without abusing workflow reruns. Preserve mismatched attempts as immutable evidence. Only a fresh reproducible R1/U1 failure may reopen candidate design.
+Once the code-verified model-lock workflow revision is present on `main`, dispatch a new replicate of `incidental-artifact-cleanup` with `model=auto` and `reasoning_effort=default`. First inspect the model-lock artifact. Interpret U0/U1 behavior only if preflight and both arms attest one exact matched runtime identity. Otherwise record the run as infrastructure-only evidence and leave candidate design closed.
 
 ## Update Rule
 
