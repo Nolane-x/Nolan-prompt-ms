@@ -71,17 +71,13 @@ jobs:
           test -n "$version"
           echo "copilot_version=$version" >> "$GITHUB_OUTPUT"
 
-  preflight:
+  seed:
     needs: [validate, resolve]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
       copilot-requests: write
-    outputs:
-      locked_model: ${{ steps.lock.outputs.locked_model }}
-      locked_reasoning_effort: ${{ steps.lock.outputs.locked_reasoning_effort }}
-      locked_tool_set_json: ${{ steps.lock.outputs.locked_tool_set_json }}
     env:
       MODEL_INPUT: ${{ inputs.model }}
       REASONING_INPUT: ${{ inputs.reasoning_effort }}
@@ -96,42 +92,48 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Initialize neutral runtime-lock workspace
+      - name: Initialize neutral local-only seed session
         shell: bash
         run: |
           set -euo pipefail
-          ROOT="$RUNNER_TEMP/execution-recovery-model-lock"
-          mkdir -p "$ROOT/workspace"
-          printf '%s\n' 'Return READY. Do not modify files and do not solve any repository task.' > "$ROOT/prompt.txt"
+          ROOT="$RUNNER_TEMP/execution-recovery-seed"
+          SEED_HOME="$ROOT/seed-home"
+          mkdir -p "$SEED_HOME" "$ROOT/workspace"
+          cat > "$SEED_HOME/settings.json" <<'JSON'
+          {
+            "remoteExport": false
+          }
+          JSON
+          printf '%s\n' 'Return SEED_READY. Do not inspect or modify files and do not solve any repository task.' > "$ROOT/prompt.txt"
 
       - name: Install pinned Copilot CLI
         shell: bash
         run: |
           set -euo pipefail
+          ROOT="$RUNNER_TEMP/execution-recovery-seed"
           npm install -g "@github/copilot@${{ needs.resolve.outputs.copilot_version }}"
-          copilot --version > "$RUNNER_TEMP/execution-recovery-model-lock/copilot-version.txt"
+          copilot --version > "$ROOT/copilot-version.txt"
 
-      - id: lock
-        name: Select and prove exact runtime lock
+      - name: Select runtime before treatment and persist session fork seed
         shell: bash
         run: |
           set -euo pipefail
-          ROOT="$RUNNER_TEMP/execution-recovery-model-lock"
+          ROOT="$RUNNER_TEMP/execution-recovery-seed"
+          SEED_HOME="$ROOT/seed-home"
           WORKSPACE="$ROOT/workspace"
 
-          SELECT_REASONING_ARGS=()
+          REASONING_ARGS=()
           if [ "$REASONING_INPUT" != "default" ]; then
-            SELECT_REASONING_ARGS+=("--reasoning-effort=$REASONING_INPUT")
+            REASONING_ARGS+=("--reasoning-effort=$REASONING_INPUT")
           fi
 
-          export COPILOT_HOME="$RUNNER_TEMP/copilot-execution-recovery-preflight-select"
-          mkdir -p "$COPILOT_HOME"
+          export COPILOT_HOME="$SEED_HOME"
           set +e
           copilot \
             -C "$WORKSPACE" \
             --prompt="$(cat "$ROOT/prompt.txt")" \
             --model="$MODEL_INPUT" \
-            "${SELECT_REASONING_ARGS[@]}" \
+            "${REASONING_ARGS[@]}" \
             --output-format=json \
             --available-tools='bash,create,edit,view,glob,grep' \
             --allow-tool='write,shell(python:*)' \
@@ -142,110 +144,66 @@ jobs:
             --no-remote \
             --no-remote-export \
             --no-auto-update \
-            > "$ROOT/selected-events.jsonl" \
-            2> "$ROOT/selected.stderr.txt"
-          selected_status=$?
+            > "$ROOT/seed-events.jsonl" \
+            2> "$ROOT/seed.stderr.txt"
+          status=$?
           set -e
-          printf '%s\n' "$selected_status" > "$ROOT/selected.exit-code.txt"
-          if [ "$selected_status" != "0" ]; then
-            echo "Runtime selection preflight failed before behavioral trials." >&2
+          printf '%s\n' "$status" > "$ROOT/seed.exit-code.txt"
+          if [ "$status" != "0" ]; then
+            echo "Neutral seed session failed before treatment." >&2
             exit 1
           fi
 
           python copilot_event_parser.py attest-runtime \
-            "$ROOT/selected-events.jsonl" --json \
-            > "$ROOT/selected-attestation.json"
+            "$ROOT/seed-events.jsonl" --json \
+            > "$ROOT/seed-attestation.json"
 
-          readarray -t selected_identity < <(python - "$ROOT/selected-attestation.json" <<'PY'
+          python - "$ROOT/seed-events.jsonl" "$ROOT/session-id.txt" <<'PY'
           import json
           import pathlib
           import sys
 
-          selected = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
-          model = selected.get("model")
-          reasoning = selected.get("reasoning_effort")
-          if not isinstance(model, str) or not model.strip():
-              raise SystemExit("selected runtime missing model")
-          if not isinstance(reasoning, str) or reasoning not in {"low", "medium", "high", "xhigh"}:
-              raise SystemExit("selected runtime missing concrete reasoning effort")
-          print(model)
-          print(reasoning)
+          ids = []
+          for raw in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+              if not raw.strip():
+                  continue
+              event = json.loads(raw)
+              if event.get("type") == "result" and isinstance(event.get("sessionId"), str):
+                  ids.append(event["sessionId"])
+          if len(ids) != 1 or not ids[0].strip():
+              raise SystemExit(f"expected exactly one seed result.sessionId, found {ids!r}")
+          pathlib.Path(sys.argv[2]).write_text(ids[0] + "\n", encoding="utf-8")
           PY
-          )
-          SELECTED_MODEL="${selected_identity[0]}"
-          SELECTED_REASONING="${selected_identity[1]}"
-          printf '%s\n' "$SELECTED_MODEL" > "$ROOT/selected-model.txt"
-          printf '%s\n' "$SELECTED_REASONING" > "$ROOT/selected-reasoning-effort.txt"
 
-          export COPILOT_HOME="$RUNNER_TEMP/copilot-execution-recovery-preflight-lock"
-          mkdir -p "$COPILOT_HOME"
-          set +e
-          copilot \
-            -C "$WORKSPACE" \
-            --prompt="$(cat "$ROOT/prompt.txt")" \
-            --model="$SELECTED_MODEL" \
-            --reasoning-effort="$SELECTED_REASONING" \
-            --output-format=json \
-            --available-tools='bash,create,edit,view,glob,grep' \
-            --allow-tool='write,shell(python:*)' \
-            --disable-builtin-mcps \
-            --no-ask-user \
-            --no-custom-instructions \
-            --no-experimental \
-            --no-remote \
-            --no-remote-export \
-            --no-auto-update \
-            > "$ROOT/locked-events.jsonl" \
-            2> "$ROOT/locked.stderr.txt"
-          locked_status=$?
-          set -e
-          printf '%s\n' "$locked_status" > "$ROOT/locked.exit-code.txt"
-          if [ "$locked_status" != "0" ]; then
-            echo "Selected runtime cannot be invoked by exact model/reasoning identity; refusing behavioral trials." >&2
-            exit 1
-          fi
+          SESSION_ID=$(cat "$ROOT/session-id.txt")
+          SESSION_DIR="$SEED_HOME/session-state/$SESSION_ID"
+          test -d "$SESSION_DIR"
 
-          python copilot_event_parser.py attest-runtime \
-            "$ROOT/locked-events.jsonl" --json \
-            > "$ROOT/locked-attestation.json"
-
-          python - \
-            "$ROOT/selected-attestation.json" \
-            "$ROOT/locked-attestation.json" \
-            "$ROOT/locked-tool-set.json" \
-            "$GITHUB_OUTPUT" <<'PY'
-          import json
+          python - "$SESSION_DIR" "$ROOT/seed-state-hash.txt" <<'PY'
+          import hashlib
           import pathlib
           import sys
 
-          selected = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
-          locked = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
-          if selected["model"] != locked["model"]:
-              raise SystemExit("exact runtime lock mismatch: model")
-          if selected["reasoning_effort"] != locked["reasoning_effort"]:
-              raise SystemExit("exact runtime lock mismatch: reasoning effort")
-          if selected["tool_set"] != locked["tool_set"]:
-              raise SystemExit("exact runtime lock mismatch: tool set")
-
-          tool_set_json = json.dumps(locked["tool_set"], separators=(",", ":"))
-          pathlib.Path(sys.argv[3]).write_text(tool_set_json + "\n", encoding="utf-8")
-          with pathlib.Path(sys.argv[4]).open("a", encoding="utf-8") as output:
-              output.write(f"locked_model={locked['model']}\n")
-              output.write(f"locked_reasoning_effort={locked['reasoning_effort']}\n")
-              output.write(f"locked_tool_set_json={tool_set_json}\n")
+          root = pathlib.Path(sys.argv[1])
+          digest = hashlib.sha256()
+          for path in sorted(p for p in root.rglob("*") if p.is_file()):
+              digest.update(path.relative_to(root).as_posix().encode())
+              digest.update(b"\0")
+              digest.update(hashlib.sha256(path.read_bytes()).digest())
+          pathlib.Path(sys.argv[2]).write_text(digest.hexdigest() + "\n", encoding="utf-8")
           PY
 
-      - name: Preserve runtime-lock evidence
+      - name: Preserve immutable pre-treatment seed evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: execution-recovery-model-lock-${{ github.run_id }}
-          path: ${{ runner.temp }}/execution-recovery-model-lock
+          name: execution-recovery-seed-${{ github.run_id }}
+          path: ${{ runner.temp }}/execution-recovery-seed
           if-no-files-found: error
           retention-days: 30
 
   trial:
-    needs: [validate, resolve, preflight]
+    needs: [validate, resolve, seed]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -260,11 +218,8 @@ jobs:
       CONDITION: ${{ matrix.condition }}
       MODEL_ID: ${{ inputs.model }}
       REASONING_EFFORT: ${{ inputs.reasoning_effort }}
-      EXECUTION_MODEL_ID: ${{ needs.preflight.outputs.locked_model }}
-      EXECUTION_REASONING_EFFORT: ${{ needs.preflight.outputs.locked_reasoning_effort }}
-      LOCKED_TOOL_SET_JSON: ${{ needs.preflight.outputs.locked_tool_set_json }}
       REPLICATE: ${{ inputs.replicate }}
-      HARNESS_ID: github-copilot-execution-recovery-dev-v1
+      HARNESS_ID: github-copilot-execution-recovery-dev-v2-session-fork
       GITHUB_TOKEN: ${{ github.token }}
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
@@ -276,13 +231,58 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Download immutable pre-treatment seed
+        uses: actions/download-artifact@v4
+        with:
+          name: execution-recovery-seed-${{ github.run_id }}
+          path: ${{ runner.temp }}/execution-recovery-seed-artifact
+
+      - name: Clone and verify pre-treatment session fork before treatment
+        shell: bash
+        run: |
+          set -euo pipefail
+          SEED_ROOT="$RUNNER_TEMP/execution-recovery-seed-artifact"
+          SEED_SOURCE="$SEED_ROOT/seed-home"
+          TRIAL_ROOT="$RUNNER_TEMP/execution-recovery-dev"
+          COPILOT_HOME="$TRIAL_ROOT/copilot-home"
+          mkdir -p "$TRIAL_ROOT" "$COPILOT_HOME"
+          cp -a "$SEED_SOURCE/." "$COPILOT_HOME/"
+          cp "$SEED_ROOT/session-id.txt" "$TRIAL_ROOT/session-id.txt"
+          cp "$SEED_ROOT/seed-attestation.json" "$TRIAL_ROOT/seed-attestation.json"
+          cp "$SEED_ROOT/seed-state-hash.txt" "$TRIAL_ROOT/seed-state-hash.txt"
+          cp "$SEED_ROOT/copilot-version.txt" "$TRIAL_ROOT/seed-copilot-version.txt"
+
+          SESSION_ID=$(cat "$TRIAL_ROOT/session-id.txt")
+          EXPECTED_STATE_SHA256=$(cat "$TRIAL_ROOT/seed-state-hash.txt")
+          SESSION_DIR="$COPILOT_HOME/session-state/$SESSION_ID"
+          test -d "$SESSION_DIR"
+
+          PRE_TREATMENT_STATE_SHA256=$(python - "$SESSION_DIR" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          digest = hashlib.sha256()
+          for path in sorted(p for p in root.rglob("*") if p.is_file()):
+              digest.update(path.relative_to(root).as_posix().encode())
+              digest.update(b"\0")
+              digest.update(hashlib.sha256(path.read_bytes()).digest())
+          print(digest.hexdigest())
+          PY
+          )
+          printf '%s\n' "$PRE_TREATMENT_STATE_SHA256" > "$TRIAL_ROOT/pre-treatment-state-hash.txt"
+          if [ "$PRE_TREATMENT_STATE_SHA256" != "$EXPECTED_STATE_SHA256" ]; then
+            echo "session fork state hash mismatch" >&2
+            exit 1
+          fi
+
       - name: Prepare isolated agent-visible workspace and treatment prompt
         shell: bash
         run: |
           set -euo pipefail
           TRIAL_ROOT="$RUNNER_TEMP/execution-recovery-dev"
           WORKSPACE="$TRIAL_ROOT/workspace"
-          mkdir -p "$TRIAL_ROOT"
           python execution_recovery_development.py prepare "$CASE_ID" "$WORKSPACE" --json \
             > "$TRIAL_ROOT/prepare.json"
           python - "$TRIAL_ROOT/prepare.json" "$TRIAL_ROOT/task-prompt.txt" <<'PY'
@@ -308,25 +308,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          TRIAL_ROOT="$RUNNER_TEMP/execution-recovery-dev"
           npm install -g "@github/copilot@${{ needs.resolve.outputs.copilot_version }}"
-          copilot --version > "$RUNNER_TEMP/execution-recovery-dev/copilot-version.txt"
+          copilot --version > "$TRIAL_ROOT/copilot-version.txt"
+          cmp -s "$TRIAL_ROOT/copilot-version.txt" "$TRIAL_ROOT/seed-copilot-version.txt" || {
+            echo "session fork Copilot CLI version mismatch" >&2
+            exit 1
+          }
 
-      - name: Run isolated Copilot trial
+      - name: Resume isolated Copilot trial from common pre-treatment fork
         shell: bash
         run: |
           set -euo pipefail
           TRIAL_ROOT="$RUNNER_TEMP/execution-recovery-dev"
           WORKSPACE="$TRIAL_ROOT/workspace"
-          export COPILOT_HOME="$RUNNER_TEMP/copilot-execution-recovery-$CONDITION"
-          mkdir -p "$COPILOT_HOME"
+          COPILOT_HOME="$TRIAL_ROOT/copilot-home"
+          SESSION_ID=$(cat "$TRIAL_ROOT/session-id.txt")
+          export COPILOT_HOME
 
           start_ms=$(date +%s%3N)
           set +e
           copilot \
             -C "$WORKSPACE" \
+            --resume="$SESSION_ID" \
             --prompt="$(cat "$TRIAL_ROOT/prompt.txt")" \
-            --model="$EXECUTION_MODEL_ID" \
-            --reasoning-effort="$EXECUTION_REASONING_EFFORT" \
             --output-format=json \
             --available-tools='bash,create,edit,view,glob,grep' \
             --allow-tool='write,shell(python:*)' \
@@ -365,6 +370,8 @@ jobs:
           COPILOT_STATUS=$(cat "$TRIAL_ROOT/copilot.exit-code.txt")
           COPILOT_VERSION=$(head -n 1 "$TRIAL_ROOT/copilot-version.txt" | tr -d '\r')
           WALL_TIME_MS=$(cat "$TRIAL_ROOT/wall-time-ms.txt")
+          SESSION_ID=$(cat "$TRIAL_ROOT/session-id.txt")
+          PRE_TREATMENT_STATE_SHA256=$(cat "$TRIAL_ROOT/pre-treatment-state-hash.txt")
           PAIR_ID="gh-${GITHUB_RUN_ID}-${CASE_ID}"
 
           if [ "$COPILOT_STATUS" != "0" ]; then
@@ -391,24 +398,20 @@ jobs:
             > "$TRIAL_ROOT/runtime-attestation.json"
 
           python - \
-            "$TRIAL_ROOT/runtime-attestation.json" \
-            "$EXECUTION_MODEL_ID" \
-            "$EXECUTION_REASONING_EFFORT" \
-            "$LOCKED_TOOL_SET_JSON" <<'PY'
+            "$TRIAL_ROOT/seed-attestation.json" \
+            "$TRIAL_ROOT/runtime-attestation.json" <<'PY'
           import json
           import pathlib
           import sys
 
-          attestation = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
-          expected_model = sys.argv[2]
-          expected_reasoning = sys.argv[3]
-          expected_tool_set = json.loads(sys.argv[4])
-          if attestation["model"] != expected_model:
-              raise SystemExit("behavioral runtime drifted from preflight lock: model")
-          if attestation["reasoning_effort"] != expected_reasoning:
-              raise SystemExit("behavioral runtime drifted from preflight lock: reasoning effort")
-          if attestation["tool_set"] != expected_tool_set:
-              raise SystemExit("behavioral runtime drifted from preflight lock: tool set")
+          seed = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          attestation = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+          if seed["model"] != attestation["model"]:
+              raise SystemExit("session fork runtime mismatch: model")
+          if seed["reasoning_effort"] != attestation["reasoning_effort"]:
+              raise SystemExit("session fork runtime mismatch: reasoning effort")
+          if seed["tool_set"] != attestation["tool_set"]:
+              raise SystemExit("session fork runtime mismatch: tool set")
           PY
 
           ACTUAL_MODEL_ID=$(python - "$TRIAL_ROOT/runtime-attestation.json" <<'PY'
@@ -452,7 +455,9 @@ jobs:
             "$GITHUB_RUN_ID" \
             "$GITHUB_RUN_ATTEMPT" \
             "$CASE_ID" \
-            "$REPLICATE" <<'PY'
+            "$REPLICATE" \
+            "$SESSION_ID" \
+            "$PRE_TREATMENT_STATE_SHA256" <<'PY'
           import datetime
           import json
           import os
@@ -470,6 +475,8 @@ jobs:
               run_attempt,
               case_id,
               replicate,
+              session_id,
+              pre_treatment_state_sha256,
           ) = sys.argv[1:]
           attestation = json.loads(pathlib.Path(attestation_path).read_text(encoding="utf-8"))
           is_u1 = condition == "U1"
@@ -499,6 +506,11 @@ jobs:
                   "reasoning_effort": attestation["reasoning_effort"],
                   "sampling_controls": None,
                   "limits": {"job_timeout_minutes": 10},
+                  "session_fork": {
+                      "protocol": "copilot-local-session-resume-v1",
+                      "session_id": session_id,
+                      "pre_treatment_state_sha256": pre_treatment_state_sha256,
+                  },
               },
               "intervention": {
                   "delivery_form": "force-loaded-skill" if is_u1 else "none",
