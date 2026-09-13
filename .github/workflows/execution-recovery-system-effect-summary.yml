@@ -1,0 +1,227 @@
+name: execution-recovery-system-effect-summary
+
+# Preregistered estimand: auto-router-total-system-effect-v1
+# Treatment is force-loading verified-delta into U1 versus no skill in U0.
+# GitHub Copilot Auto routing is part of the treated system. Actual model,
+# reasoning effort, and actual tool set are post-treatment mediators, not
+# matched controls. This workflow does NOT estimate a fixed-model direct effect.
+# It is comparable only when immutable pre-treatment session state, seed runtime,
+# CLI/harness, tool policy, case provenance, and requested Auto policy match.
+
+on:
+  workflow_run:
+    workflows: ["execution-recovery-development"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  ESTIMAND_ID: auto-router-total-system-effect-v1
+  EXPECTED_SKILL_SHA256: 81f44a454bf00d61a172217864114b71e9792a4247b7f4459633f7b5deb3c5a9
+
+jobs:
+  summarize-system-effect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact source-run head
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Verify runtime skill bytes are unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(sha256sum verified-delta/SKILL.md | awk '{print $1}')
+          test "$actual" = "$EXPECTED_SKILL_SHA256"
+
+      - name: Initialize system-effect summary workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/system-effect-raw" "$RUNNER_TEMP/system-effect-summary"
+          printf '%s\n' 'summary pending' > "$RUNNER_TEMP/system-effect-summary/status.txt"
+
+      - name: Download immutable raw receipts from source run
+        uses: actions/download-artifact@v4
+        with:
+          pattern: execution-recovery-raw-*
+          path: ${{ runner.temp }}/system-effect-raw
+          merge-multiple: false
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Summarize preregistered Auto-router total system effect
+        shell: bash
+        env:
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          PREREGISTRATION_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+
+          raw_root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "system-effect-raw"
+          out_root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "system-effect-summary"
+          receipt_paths = sorted(raw_root.rglob("receipt.json"))
+
+          def canonical_sha256(value):
+              encoded = json.dumps(
+                  value,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+              ).encode("utf-8")
+              return hashlib.sha256(encoded).hexdigest()
+
+          def classify(u0_passed, u1_passed):
+              if u0_passed and u1_passed:
+                  return "same_pass"
+              if not u0_passed and not u1_passed:
+                  return "same_fail"
+              if not u0_passed and u1_passed:
+                  return "u1_gain"
+              return "u1_harm"
+
+          def pre_treatment_signature(receipt):
+              matched = receipt["run_config"]["value"]["matched"]
+              model = matched["model"]
+              return {
+                  "prompt_language": matched["prompt_language"],
+                  "model_assignment_policy": {
+                      "provider": model["provider"],
+                      "requested": model.get("requested"),
+                      "snapshot": model["snapshot"],
+                  },
+                  "harness": matched["harness"],
+                  "tool_policy": matched["tool_policy"],
+                  "sampling_controls": matched["sampling_controls"],
+                  "limits": matched["limits"],
+                  "session_fork": matched["session_fork"],
+              }
+
+          payload = {
+              "schema_version": 1,
+              "estimand_id": os.environ["ESTIMAND_ID"],
+              "source_run_id": int(os.environ["SOURCE_RUN_ID"]),
+              "source_head_sha": os.environ["SOURCE_HEAD_SHA"],
+              "source_workflow_conclusion": os.environ["SOURCE_CONCLUSION"],
+              "preregistration_workflow_sha": os.environ["PREREGISTRATION_WORKFLOW_SHA"],
+              "includes_auto_router": True,
+              "estimates_fixed_model_direct_effect": False,
+              "comparable": False,
+              "issues": [],
+          }
+          issues = payload["issues"]
+
+          try:
+              if len(receipt_paths) != 2:
+                  raise ValueError(f"expected exactly two immutable receipts, found {len(receipt_paths)}")
+              receipts = [json.loads(path.read_text(encoding="utf-8")) for path in receipt_paths]
+              by_condition = {receipt.get("condition"): receipt for receipt in receipts}
+              if set(by_condition) != {"U0", "U1"}:
+                  raise ValueError(f"expected exactly U0/U1 receipts, got {sorted(by_condition)}")
+              u0 = by_condition["U0"]
+              u1 = by_condition["U1"]
+
+              if u0.get("case_id") not in {"temporal-supersession", "temporal-continuity-control"}:
+                  payload["status"] = "skipped_non_temporal_case"
+                  payload["case_id"] = u0.get("case_id")
+                  (out_root / "summary.json").write_text(
+                      json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+                  )
+                  (out_root / "status.txt").write_text("skipped non-temporal case\n", encoding="utf-8")
+                  raise SystemExit(0)
+
+              for field in ("case_id", "pair_id", "replicate", "harness_id", "eval_provenance"):
+                  if u0.get(field) != u1.get(field):
+                      issues.append(f"{field} mismatch")
+
+              u0_sig = pre_treatment_signature(u0)
+              u1_sig = pre_treatment_signature(u1)
+              if u0_sig != u1_sig:
+                  issues.append("pre-treatment signature mismatch")
+
+              for condition, receipt in (("U0", u0), ("U1", u1)):
+                  requested = receipt["run_config"]["value"]["matched"]["model"].get("requested")
+                  if requested != "auto":
+                      issues.append(f"{condition} requested model policy is not auto")
+
+              if u0["run_config"]["value"]["intervention"]["delivery_form"] != "none":
+                  issues.append("U0 intervention delivery is not none")
+              if u1["run_config"]["value"]["intervention"]["delivery_form"] != "force-loaded-skill":
+                  issues.append("U1 intervention delivery is not force-loaded-skill")
+              if u0.get("skill") != {"loaded": False, "sha256": None}:
+                  issues.append("U0 skill binding invalid")
+              expected_skill_sha = os.environ["EXPECTED_SKILL_SHA256"]
+              if u1.get("skill") != {"loaded": True, "sha256": expected_skill_sha}:
+                  issues.append("U1 skill binding/hash invalid")
+
+              def matched(receipt):
+                  return receipt["run_config"]["value"]["matched"]
+
+              mediators = {
+                  "model": {
+                      "U0": u0["model_id"],
+                      "U1": u1["model_id"],
+                      "changed": u0["model_id"] != u1["model_id"],
+                  },
+                  "reasoning_effort": {
+                      "U0": matched(u0)["reasoning_effort"],
+                      "U1": matched(u1)["reasoning_effort"],
+                      "changed": matched(u0)["reasoning_effort"] != matched(u1)["reasoning_effort"],
+                  },
+                  "tool_set": {
+                      "U0": matched(u0)["tool_set"],
+                      "U1": matched(u1)["tool_set"],
+                      "changed": matched(u0)["tool_set"] != matched(u1)["tool_set"],
+                  },
+              }
+
+              payload.update({
+                  "case_id": u0["case_id"],
+                  "pair_id": u0["pair_id"],
+                  "replicate": u0["replicate"],
+                  "pre_treatment_signature_sha256": canonical_sha256(u0_sig),
+                  "conditions": {
+                      "U0": {"passed": u0["grade"]["passed"], "metrics": u0["metrics"]},
+                      "U1": {"passed": u1["grade"]["passed"], "metrics": u1["metrics"]},
+                  },
+                  "mediators": mediators,
+                  "comparable": not issues,
+                  "effect": None if issues else classify(u0["grade"]["passed"], u1["grade"]["passed"]),
+                  "status": "valid" if not issues else "not_comparable",
+              })
+          except Exception as exc:
+              issues.append(f"infrastructure: {type(exc).__name__}: {exc}")
+              payload["status"] = "infrastructure_failure"
+
+          (out_root / "summary.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          if payload.get("comparable"):
+              (out_root / "status.txt").write_text("system-effect summary valid\n", encoding="utf-8")
+          else:
+              (out_root / "status.txt").write_text(
+                  f"system-effect summary {payload.get('status', 'invalid')}\n", encoding="utf-8"
+              )
+              raise SystemExit("system-effect pair is not comparable")
+          PY
+
+      - name: Preserve system-effect summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: execution-recovery-system-effect-${{ github.event.workflow_run.id }}
+          path: ${{ runner.temp }}/system-effect-summary
+          if-no-files-found: error
+          retention-days: 30
