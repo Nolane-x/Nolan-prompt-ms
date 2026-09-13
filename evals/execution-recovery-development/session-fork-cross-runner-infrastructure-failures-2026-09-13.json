@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "classification": "infrastructure-only",
+  "behavioral_inference_executed": false,
+  "candidate_gate_effect": "none",
+  "source_main_sha": "196a861030cc865e371d50742402126324850cc7",
+  "root_cause": {
+    "kind": "seed_snapshot_toctou",
+    "summary": "seed-state-hash.txt was computed from the live seed-home session-state tree, but the live Copilot state mutated again before artifact upload; the transferred artifact and both trial clones therefore shared later bytes that no longer matched the stale stored hash",
+    "artifact_corruption": false,
+    "fix_boundary": "freeze a copied seed home first, hash the frozen copy, upload that same frozen copy, and make both arms clone only that frozen copy"
+  },
+  "runs": [
+    {
+      "run_id": 34732880632,
+      "case_id": "incidental-artifact-cleanup",
+      "replicate": 3,
+      "seed_job": "success",
+      "u0_behavior_started": false,
+      "u1_behavior_started": false,
+      "failure_step": "Clone and verify pre-treatment session fork before treatment",
+      "error": "session fork state hash mismatch",
+      "seed_artifact": {
+        "id": 10309493633,
+        "sha256": "28ba83f0dd94f2c02d67c15a893260606289c89d678acc8f2671a8c4ef8062a5"
+      },
+      "stored_seed_state_sha256": "2f1b30f9305b7e0dd3e1185a4230d20bfb4afbbd3fdb989cc37b61a5ca3e41f2",
+      "artifact_session_state_sha256": "bf305f25776e9bde4edd043d28ff1de681f5bd3cf816305e8ae231d702add693",
+      "u0_cloned_session_state_sha256": "bf305f25776e9bde4edd043d28ff1de681f5bd3cf816305e8ae231d702add693"
+    },
+    {
+      "run_id": 34732882721,
+      "case_id": "required-artifact-preserved",
+      "replicate": 2,
+      "seed_job": "success",
+      "u0_behavior_started": false,
+      "u1_behavior_started": false,
+      "failure_step": "Clone and verify pre-treatment session fork before treatment",
+      "error": "session fork state hash mismatch",
+      "seed_artifact": {
+        "id": 10310078630,
+        "sha256": "0f038f7d582737f68981155599505f0359c810678887e2f2d93871fbf924a547"
+      },
+      "stored_seed_state_sha256": "3940bbf0731dc0fea9f789880ae8805b365a090c89527fd166994184ecb0e495",
+      "artifact_session_state_sha256": "7a0c050e24dca757224e22cf3a52c1d59551a6064347ef50f011841108d59b7f",
+      "u0_cloned_session_state_sha256": "7a0c050e24dca757224e22cf3a52c1d59551a6064347ef50f011841108d59b7f"
+    }
+  ],
+  "tdd_fix": {
+    "red_commit": "11ec4cdd309149a06106719d3402fbcf320c43b8",
+    "red_run": 34733113657,
+    "red_result": "98 tests, exactly one intended frozen-snapshot contract failure",
+    "green_commit": "453484abb9b812bd38b99a661c7a6d567781625d",
+    "green_run": 34733172015,
+    "green_result": "98/98 tests PASS + python verify.py PASS"
+  }
+}
