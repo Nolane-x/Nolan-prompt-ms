@@ -71,8 +71,181 @@ jobs:
           test -n "$version"
           echo "copilot_version=$version" >> "$GITHUB_OUTPUT"
 
-  trial:
+  preflight:
     needs: [validate, resolve]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      copilot-requests: write
+    outputs:
+      locked_model: ${{ steps.lock.outputs.locked_model }}
+      locked_reasoning_effort: ${{ steps.lock.outputs.locked_reasoning_effort }}
+      locked_tool_set_json: ${{ steps.lock.outputs.locked_tool_set_json }}
+    env:
+      MODEL_INPUT: ${{ inputs.model }}
+      REASONING_INPUT: ${{ inputs.reasoning_effort }}
+      GITHUB_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Initialize neutral runtime-lock workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/execution-recovery-model-lock"
+          mkdir -p "$ROOT/workspace"
+          printf '%s\n' 'Return READY. Do not modify files and do not solve any repository task.' > "$ROOT/prompt.txt"
+
+      - name: Install pinned Copilot CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g "@github/copilot@${{ needs.resolve.outputs.copilot_version }}"
+          copilot --version > "$RUNNER_TEMP/execution-recovery-model-lock/copilot-version.txt"
+
+      - id: lock
+        name: Select and prove exact runtime lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/execution-recovery-model-lock"
+          WORKSPACE="$ROOT/workspace"
+
+          SELECT_REASONING_ARGS=()
+          if [ "$REASONING_INPUT" != "default" ]; then
+            SELECT_REASONING_ARGS+=("--reasoning-effort=$REASONING_INPUT")
+          fi
+
+          export COPILOT_HOME="$RUNNER_TEMP/copilot-execution-recovery-preflight-select"
+          mkdir -p "$COPILOT_HOME"
+          set +e
+          copilot \
+            -C "$WORKSPACE" \
+            --prompt="$(cat "$ROOT/prompt.txt")" \
+            --model="$MODEL_INPUT" \
+            "${SELECT_REASONING_ARGS[@]}" \
+            --output-format=json \
+            --available-tools='bash,create,edit,view,glob,grep' \
+            --allow-tool='write,shell(python:*)' \
+            --disable-builtin-mcps \
+            --no-ask-user \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            > "$ROOT/selected-events.jsonl" \
+            2> "$ROOT/selected.stderr.txt"
+          selected_status=$?
+          set -e
+          printf '%s\n' "$selected_status" > "$ROOT/selected.exit-code.txt"
+          if [ "$selected_status" != "0" ]; then
+            echo "Runtime selection preflight failed before behavioral trials." >&2
+            exit 1
+          fi
+
+          python copilot_event_parser.py attest-runtime \
+            "$ROOT/selected-events.jsonl" --json \
+            > "$ROOT/selected-attestation.json"
+
+          readarray -t selected_identity < <(python - "$ROOT/selected-attestation.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          selected = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          model = selected.get("model")
+          reasoning = selected.get("reasoning_effort")
+          if not isinstance(model, str) or not model.strip():
+              raise SystemExit("selected runtime missing model")
+          if not isinstance(reasoning, str) or reasoning not in {"low", "medium", "high", "xhigh"}:
+              raise SystemExit("selected runtime missing concrete reasoning effort")
+          print(model)
+          print(reasoning)
+          PY
+          )
+          SELECTED_MODEL="${selected_identity[0]}"
+          SELECTED_REASONING="${selected_identity[1]}"
+          printf '%s\n' "$SELECTED_MODEL" > "$ROOT/selected-model.txt"
+          printf '%s\n' "$SELECTED_REASONING" > "$ROOT/selected-reasoning-effort.txt"
+
+          export COPILOT_HOME="$RUNNER_TEMP/copilot-execution-recovery-preflight-lock"
+          mkdir -p "$COPILOT_HOME"
+          set +e
+          copilot \
+            -C "$WORKSPACE" \
+            --prompt="$(cat "$ROOT/prompt.txt")" \
+            --model="$SELECTED_MODEL" \
+            --reasoning-effort="$SELECTED_REASONING" \
+            --output-format=json \
+            --available-tools='bash,create,edit,view,glob,grep' \
+            --allow-tool='write,shell(python:*)' \
+            --disable-builtin-mcps \
+            --no-ask-user \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            > "$ROOT/locked-events.jsonl" \
+            2> "$ROOT/locked.stderr.txt"
+          locked_status=$?
+          set -e
+          printf '%s\n' "$locked_status" > "$ROOT/locked.exit-code.txt"
+          if [ "$locked_status" != "0" ]; then
+            echo "Selected runtime cannot be invoked by exact model/reasoning identity; refusing behavioral trials." >&2
+            exit 1
+          fi
+
+          python copilot_event_parser.py attest-runtime \
+            "$ROOT/locked-events.jsonl" --json \
+            > "$ROOT/locked-attestation.json"
+
+          python - \
+            "$ROOT/selected-attestation.json" \
+            "$ROOT/locked-attestation.json" \
+            "$ROOT/locked-tool-set.json" \
+            "$GITHUB_OUTPUT" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          selected = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          locked = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+          if selected["model"] != locked["model"]:
+              raise SystemExit("exact runtime lock mismatch: model")
+          if selected["reasoning_effort"] != locked["reasoning_effort"]:
+              raise SystemExit("exact runtime lock mismatch: reasoning effort")
+          if selected["tool_set"] != locked["tool_set"]:
+              raise SystemExit("exact runtime lock mismatch: tool set")
+
+          tool_set_json = json.dumps(locked["tool_set"], separators=(",", ":"))
+          pathlib.Path(sys.argv[3]).write_text(tool_set_json + "\n", encoding="utf-8")
+          with pathlib.Path(sys.argv[4]).open("a", encoding="utf-8") as output:
+              output.write(f"locked_model={locked['model']}\n")
+              output.write(f"locked_reasoning_effort={locked['reasoning_effort']}\n")
+              output.write(f"locked_tool_set_json={tool_set_json}\n")
+          PY
+
+      - name: Preserve runtime-lock evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: execution-recovery-model-lock-${{ github.run_id }}
+          path: ${{ runner.temp }}/execution-recovery-model-lock
+          if-no-files-found: error
+          retention-days: 30
+
+  trial:
+    needs: [validate, resolve, preflight]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -87,6 +260,9 @@ jobs:
       CONDITION: ${{ matrix.condition }}
       MODEL_ID: ${{ inputs.model }}
       REASONING_EFFORT: ${{ inputs.reasoning_effort }}
+      EXECUTION_MODEL_ID: ${{ needs.preflight.outputs.locked_model }}
+      EXECUTION_REASONING_EFFORT: ${{ needs.preflight.outputs.locked_reasoning_effort }}
+      LOCKED_TOOL_SET_JSON: ${{ needs.preflight.outputs.locked_tool_set_json }}
       REPLICATE: ${{ inputs.replicate }}
       HARNESS_ID: github-copilot-execution-recovery-dev-v1
       GITHUB_TOKEN: ${{ github.token }}
@@ -144,18 +320,13 @@ jobs:
           export COPILOT_HOME="$RUNNER_TEMP/copilot-execution-recovery-$CONDITION"
           mkdir -p "$COPILOT_HOME"
 
-          REASONING_ARGS=()
-          if [ "$REASONING_EFFORT" != "default" ]; then
-            REASONING_ARGS+=("--reasoning-effort=$REASONING_EFFORT")
-          fi
-
           start_ms=$(date +%s%3N)
           set +e
           copilot \
             -C "$WORKSPACE" \
             --prompt="$(cat "$TRIAL_ROOT/prompt.txt")" \
-            --model="$MODEL_ID" \
-            "${REASONING_ARGS[@]}" \
+            --model="$EXECUTION_MODEL_ID" \
+            --reasoning-effort="$EXECUTION_REASONING_EFFORT" \
             --output-format=json \
             --available-tools='bash,create,edit,view,glob,grep' \
             --allow-tool='write,shell(python:*)' \
@@ -218,6 +389,27 @@ jobs:
           python copilot_event_parser.py attest-runtime \
             "$TRIAL_ROOT/copilot-events.jsonl" --json \
             > "$TRIAL_ROOT/runtime-attestation.json"
+
+          python - \
+            "$TRIAL_ROOT/runtime-attestation.json" \
+            "$EXECUTION_MODEL_ID" \
+            "$EXECUTION_REASONING_EFFORT" \
+            "$LOCKED_TOOL_SET_JSON" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          attestation = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          expected_model = sys.argv[2]
+          expected_reasoning = sys.argv[3]
+          expected_tool_set = json.loads(sys.argv[4])
+          if attestation["model"] != expected_model:
+              raise SystemExit("behavioral runtime drifted from preflight lock: model")
+          if attestation["reasoning_effort"] != expected_reasoning:
+              raise SystemExit("behavioral runtime drifted from preflight lock: reasoning effort")
+          if attestation["tool_set"] != expected_tool_set:
+              raise SystemExit("behavioral runtime drifted from preflight lock: tool set")
+          PY
 
           ACTUAL_MODEL_ID=$(python - "$TRIAL_ROOT/runtime-attestation.json" <<'PY'
           import json
