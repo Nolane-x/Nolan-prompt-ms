@@ -65,7 +65,8 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
         self.assertIn("execution-recovery-seed-${{ github.run_id }}", workflow)
         self.assertIn("needs: [validate, resolve, seed]", workflow)
         self.assertIn("actions/download-artifact@v4", workflow)
-        self.assertIn('cp -a "$SEED_SOURCE/." "$COPILOT_HOME/"', workflow)
+        self.assertIn('SEED_ARCHIVE="$SEED_ROOT/frozen-seed-home.tar"', workflow)
+        self.assertIn('tar -xf "$SEED_ARCHIVE" -C "$COPILOT_HOME"', workflow)
         self.assertIn('--resume="$SESSION_ID"', workflow)
         self.assertNotIn('--model="$EXECUTION_MODEL_ID"', workflow)
         self.assertNotIn('--reasoning-effort="$EXECUTION_REASONING_EFFORT"', workflow)
@@ -97,24 +98,42 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
         self.assertIn("session fork state hash mismatch", workflow)
         self.assertIn("if: always()", workflow)
 
-    def test_seed_hash_is_bound_to_frozen_uploaded_snapshot(self):
+    def test_seed_hash_is_bound_to_lossless_transport_archive(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         seed_index = workflow.index("\n  seed:\n")
         trial_index = workflow.index("\n  trial:\n")
         seed_block = workflow[seed_index:trial_index]
+        trial_block = workflow[trial_index:]
 
         self.assertIn('FROZEN_HOME="$ROOT/frozen-seed-home"', seed_block)
         self.assertIn('cp -a "$SEED_HOME/." "$FROZEN_HOME/"', seed_block)
-        self.assertIn('FROZEN_SESSION_DIR="$FROZEN_HOME/session-state/$SESSION_ID"', seed_block)
+        self.assertIn('ARCHIVE="$ROOT/frozen-seed-home.tar"', seed_block)
         self.assertIn(
-            'python - "$FROZEN_SESSION_DIR" "$ROOT/seed-state-hash.txt"',
+            'tar --exclude="./session-state/$SESSION_ID/inuse.*.lock"',
             seed_block,
         )
-        self.assertIn('SEED_SOURCE="$SEED_ROOT/frozen-seed-home"', workflow)
-        self.assertNotIn(
-            'python - "$SESSION_DIR" "$ROOT/seed-state-hash.txt"',
+        self.assertIn('-C "$FROZEN_HOME" -cf "$ARCHIVE" .', seed_block)
+        self.assertIn('seed-archive-hash.txt', seed_block)
+        self.assertIn('VERIFY_HOME="$ROOT/archive-verification-home"', seed_block)
+        self.assertIn(
+            'python - "$VERIFIED_SESSION_DIR" "$ROOT/seed-state-hash.txt"',
             seed_block,
         )
+        self.assertIn(
+            '${{ runner.temp }}/execution-recovery-seed/frozen-seed-home.tar',
+            seed_block,
+        )
+        self.assertIn('include-hidden-files: false', seed_block)
+
+        self.assertIn('SEED_ARCHIVE="$SEED_ROOT/frozen-seed-home.tar"', trial_block)
+        self.assertIn('session fork archive hash mismatch', trial_block)
+        self.assertIn('tar -xf "$SEED_ARCHIVE" -C "$COPILOT_HOME"', trial_block)
+        self.assertIn('copilot-local-session-resume-v2-tar', trial_block)
+        self.assertIn(
+            '"transport_archive_sha256": transport_archive_sha256',
+            trial_block,
+        )
+        self.assertNotIn('SEED_SOURCE="$SEED_ROOT/frozen-seed-home"', trial_block)
 
     def test_recovery_pressure_comes_from_tool_policy_not_prompt_answer_leakage(self):
         result = self.run_harness("list", "--json")
