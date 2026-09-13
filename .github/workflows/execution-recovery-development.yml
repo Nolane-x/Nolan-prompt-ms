@@ -1,0 +1,663 @@
+name: execution-recovery-development
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: Fresh execution-recovery development case
+        required: true
+        type: choice
+        options:
+          - execution-recovery-required
+          - execution-recovery-noop
+          - incidental-artifact-cleanup
+          - required-artifact-preserved
+          - temporal-supersession
+          - temporal-continuity-control
+      model:
+        description: Copilot model identifier or auto
+        required: true
+        default: auto
+        type: string
+      reasoning_effort:
+        description: Reasoning effort, or default to omit the flag
+        required: true
+        default: default
+        type: choice
+        options:
+          - default
+          - low
+          - medium
+          - high
+          - xhigh
+      replicate:
+        description: Positive replicate number
+        required: true
+        default: "1"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      REPLICATE_INPUT: ${{ inputs.replicate }}
+      MODEL_INPUT: ${{ inputs.model }}
+      REASONING_INPUT: ${{ inputs.reasoning_effort }}
+    steps:
+      - name: Validate dispatch inputs before any Copilot trial
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$REPLICATE_INPUT" =~ ^[1-9][0-9]*$ ]]
+          [[ -n "${MODEL_INPUT//[[:space:]]/}" ]]
+          if [ "$MODEL_INPUT" = "auto" ] && [ "$REASONING_INPUT" != "default" ]; then
+            echo "Auto model selection does not accept an explicit reasoning-effort flag in this harness." >&2
+            exit 1
+          fi
+
+  resolve:
+    needs: validate
+    runs-on: ubuntu-latest
+    outputs:
+      copilot_version: ${{ steps.version.outputs.copilot_version }}
+    steps:
+      - id: version
+        name: Resolve one Copilot CLI version for the pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(npm view @github/copilot version)
+          test -n "$version"
+          echo "copilot_version=$version" >> "$GITHUB_OUTPUT"
+
+  seed:
+    needs: [validate, resolve]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      copilot-requests: write
+    env:
+      MODEL_INPUT: ${{ inputs.model }}
+      REASONING_INPUT: ${{ inputs.reasoning_effort }}
+      GITHUB_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Initialize neutral local-only seed session
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/execution-recovery-seed"
+          SEED_HOME="$ROOT/seed-home"
+          mkdir -p "$SEED_HOME" "$ROOT/workspace"
+          cat > "$SEED_HOME/settings.json" <<'JSON'
+          {
+            "remoteExport": false
+          }
+          JSON
+          printf '%s\n' 'Return SEED_READY. Do not inspect or modify files and do not solve any repository task.' > "$ROOT/prompt.txt"
+
+      - name: Install pinned Copilot CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/execution-recovery-seed"
+          npm install -g "@github/copilot@${{ needs.resolve.outputs.copilot_version }}"
+          copilot --version > "$ROOT/copilot-version.txt"
+
+      - name: Select runtime before treatment and persist session fork seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/execution-recovery-seed"
+          SEED_HOME="$ROOT/seed-home"
+          FROZEN_HOME="$ROOT/frozen-seed-home"
+          WORKSPACE="$ROOT/workspace"
+
+          REASONING_ARGS=()
+          if [ "$REASONING_INPUT" != "default" ]; then
+            REASONING_ARGS+=("--reasoning-effort=$REASONING_INPUT")
+          fi
+
+          export COPILOT_HOME="$SEED_HOME"
+          set +e
+          copilot \
+            -C "$WORKSPACE" \
+            --prompt="$(cat "$ROOT/prompt.txt")" \
+            --model="$MODEL_INPUT" \
+            "${REASONING_ARGS[@]}" \
+            --output-format=json \
+            --available-tools='bash,create,edit,view,glob,grep' \
+            --allow-tool='write,shell(python:*)' \
+            --disable-builtin-mcps \
+            --no-ask-user \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            > "$ROOT/seed-events.jsonl" \
+            2> "$ROOT/seed.stderr.txt"
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$ROOT/seed.exit-code.txt"
+          if [ "$status" != "0" ]; then
+            echo "Neutral seed session failed before treatment." >&2
+            exit 1
+          fi
+
+          python copilot_event_parser.py attest-runtime \
+            "$ROOT/seed-events.jsonl" --json \
+            > "$ROOT/seed-attestation.json"
+
+          python - "$ROOT/seed-events.jsonl" "$ROOT/session-id.txt" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          ids = []
+          for raw in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+              if not raw.strip():
+                  continue
+              event = json.loads(raw)
+              if event.get("type") == "result" and isinstance(event.get("sessionId"), str):
+                  ids.append(event["sessionId"])
+          if len(ids) != 1 or not ids[0].strip():
+              raise SystemExit(f"expected exactly one seed result.sessionId, found {ids!r}")
+          pathlib.Path(sys.argv[2]).write_text(ids[0] + "\n", encoding="utf-8")
+          PY
+
+          SESSION_ID=$(cat "$ROOT/session-id.txt")
+          SESSION_DIR="$SEED_HOME/session-state/$SESSION_ID"
+          test -d "$SESSION_DIR"
+
+          rm -rf "$FROZEN_HOME"
+          mkdir -p "$FROZEN_HOME"
+          cp -a "$SEED_HOME/." "$FROZEN_HOME/"
+          FROZEN_SESSION_DIR="$FROZEN_HOME/session-state/$SESSION_ID"
+          test -d "$FROZEN_SESSION_DIR"
+
+          ARCHIVE="$ROOT/frozen-seed-home.tar"
+          tar --exclude="./session-state/$SESSION_ID/inuse.*.lock" \
+            -C "$FROZEN_HOME" -cf "$ARCHIVE" .
+          sha256sum "$ARCHIVE" | awk '{print $1}' > "$ROOT/seed-archive-hash.txt"
+
+          VERIFY_HOME="$ROOT/archive-verification-home"
+          rm -rf "$VERIFY_HOME"
+          mkdir -p "$VERIFY_HOME"
+          tar -xf "$ARCHIVE" -C "$VERIFY_HOME"
+          VERIFIED_SESSION_DIR="$VERIFY_HOME/session-state/$SESSION_ID"
+          test -d "$VERIFIED_SESSION_DIR"
+
+          python - "$VERIFIED_SESSION_DIR" "$ROOT/seed-state-hash.txt" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          digest = hashlib.sha256()
+          for path in sorted(p for p in root.rglob("*") if p.is_file()):
+              digest.update(path.relative_to(root).as_posix().encode())
+              digest.update(b"\0")
+              digest.update(hashlib.sha256(path.read_bytes()).digest())
+          pathlib.Path(sys.argv[2]).write_text(digest.hexdigest() + "\n", encoding="utf-8")
+          PY
+
+      - name: Preserve immutable pre-treatment seed evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: execution-recovery-seed-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/execution-recovery-seed/frozen-seed-home.tar
+            ${{ runner.temp }}/execution-recovery-seed/seed-archive-hash.txt
+            ${{ runner.temp }}/execution-recovery-seed/session-id.txt
+            ${{ runner.temp }}/execution-recovery-seed/seed-attestation.json
+            ${{ runner.temp }}/execution-recovery-seed/seed-state-hash.txt
+            ${{ runner.temp }}/execution-recovery-seed/copilot-version.txt
+            ${{ runner.temp }}/execution-recovery-seed/seed-events.jsonl
+            ${{ runner.temp }}/execution-recovery-seed/seed.stderr.txt
+            ${{ runner.temp }}/execution-recovery-seed/seed.exit-code.txt
+            ${{ runner.temp }}/execution-recovery-seed/prompt.txt
+          if-no-files-found: error
+          retention-days: 30
+          include-hidden-files: false
+
+  trial:
+    needs: [validate, resolve, seed]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      copilot-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        condition: [U0, U1]
+    env:
+      CASE_ID: ${{ inputs.case_id }}
+      CONDITION: ${{ matrix.condition }}
+      MODEL_ID: ${{ inputs.model }}
+      REASONING_EFFORT: ${{ inputs.reasoning_effort }}
+      REPLICATE: ${{ inputs.replicate }}
+      HARNESS_ID: github-copilot-execution-recovery-dev-v4-late-bound-runtime
+      GITHUB_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download immutable pre-treatment seed
+        uses: actions/download-artifact@v4
+        with:
+          name: execution-recovery-seed-${{ github.run_id }}
+          path: ${{ runner.temp }}/execution-recovery-seed-artifact
+
+      - name: Clone and verify pre-treatment session fork before treatment
+        shell: bash
+        run: |
+          set -euo pipefail
+          SEED_ROOT="$RUNNER_TEMP/execution-recovery-seed-artifact"
+          SEED_ARCHIVE="$SEED_ROOT/frozen-seed-home.tar"
+          TRIAL_ROOT="$RUNNER_TEMP/execution-recovery-dev"
+          COPILOT_HOME="$TRIAL_ROOT/copilot-home"
+          mkdir -p "$TRIAL_ROOT" "$COPILOT_HOME"
+
+          EXPECTED_ARCHIVE_SHA256=$(cat "$SEED_ROOT/seed-archive-hash.txt")
+          ACTUAL_ARCHIVE_SHA256=$(sha256sum "$SEED_ARCHIVE" | awk '{print $1}')
+          if [ "$ACTUAL_ARCHIVE_SHA256" != "$EXPECTED_ARCHIVE_SHA256" ]; then
+            echo "session fork archive hash mismatch" >&2
+            exit 1
+          fi
+          tar -xf "$SEED_ARCHIVE" -C "$COPILOT_HOME"
+
+          cp "$SEED_ROOT/session-id.txt" "$TRIAL_ROOT/session-id.txt"
+          cp "$SEED_ROOT/seed-attestation.json" "$TRIAL_ROOT/seed-attestation.json"
+          cp "$SEED_ROOT/seed-state-hash.txt" "$TRIAL_ROOT/seed-state-hash.txt"
+          cp "$SEED_ROOT/seed-archive-hash.txt" "$TRIAL_ROOT/seed-archive-hash.txt"
+          cp "$SEED_ROOT/copilot-version.txt" "$TRIAL_ROOT/seed-copilot-version.txt"
+
+          SESSION_ID=$(cat "$TRIAL_ROOT/session-id.txt")
+          EXPECTED_STATE_SHA256=$(cat "$TRIAL_ROOT/seed-state-hash.txt")
+          SESSION_DIR="$COPILOT_HOME/session-state/$SESSION_ID"
+          test -d "$SESSION_DIR"
+
+          PRE_TREATMENT_STATE_SHA256=$(python - "$SESSION_DIR" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          digest = hashlib.sha256()
+          for path in sorted(p for p in root.rglob("*") if p.is_file()):
+              digest.update(path.relative_to(root).as_posix().encode())
+              digest.update(b"\0")
+              digest.update(hashlib.sha256(path.read_bytes()).digest())
+          print(digest.hexdigest())
+          PY
+          )
+          printf '%s\n' "$PRE_TREATMENT_STATE_SHA256" > "$TRIAL_ROOT/pre-treatment-state-hash.txt"
+          if [ "$PRE_TREATMENT_STATE_SHA256" != "$EXPECTED_STATE_SHA256" ]; then
+            echo "session fork state hash mismatch" >&2
+            exit 1
+          fi
+
+      - name: Prepare isolated agent-visible workspace and treatment prompt
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRIAL_ROOT="$RUNNER_TEMP/execution-recovery-dev"
+          WORKSPACE="$TRIAL_ROOT/workspace"
+          python execution_recovery_development.py prepare "$CASE_ID" "$WORKSPACE" --json \
+            > "$TRIAL_ROOT/prepare.json"
+          python - "$TRIAL_ROOT/prepare.json" "$TRIAL_ROOT/task-prompt.txt" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          pathlib.Path(sys.argv[2]).write_text(payload["prompt"] + "\n", encoding="utf-8")
+          PY
+
+          if [ "$CONDITION" = "U1" ]; then
+            {
+              cat verified-delta/SKILL.md
+              printf '\n\n---\n\n'
+              cat "$TRIAL_ROOT/task-prompt.txt"
+            } > "$TRIAL_ROOT/prompt.txt"
+          else
+            cp "$TRIAL_ROOT/task-prompt.txt" "$TRIAL_ROOT/prompt.txt"
+          fi
+
+      - name: Install pinned Copilot CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRIAL_ROOT="$RUNNER_TEMP/execution-recovery-dev"
+          npm install -g "@github/copilot@${{ needs.resolve.outputs.copilot_version }}"
+          copilot --version > "$TRIAL_ROOT/copilot-version.txt"
+          cmp -s "$TRIAL_ROOT/copilot-version.txt" "$TRIAL_ROOT/seed-copilot-version.txt" || {
+            echo "session fork Copilot CLI version mismatch" >&2
+            exit 1
+          }
+
+      - name: Resume isolated Copilot trial from common pre-treatment fork
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRIAL_ROOT="$RUNNER_TEMP/execution-recovery-dev"
+          WORKSPACE="$TRIAL_ROOT/workspace"
+          COPILOT_HOME="$TRIAL_ROOT/copilot-home"
+          SESSION_ID=$(cat "$TRIAL_ROOT/session-id.txt")
+          export COPILOT_HOME
+
+          start_ms=$(date +%s%3N)
+          set +e
+          copilot \
+            -C "$WORKSPACE" \
+            --resume="$SESSION_ID" \
+            --prompt="$(cat "$TRIAL_ROOT/prompt.txt")" \
+            --output-format=json \
+            --available-tools='bash,create,edit,view,glob,grep' \
+            --allow-tool='write,shell(python:*)' \
+            --disable-builtin-mcps \
+            --no-ask-user \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            --share="$TRIAL_ROOT/transcript.md" \
+            > "$TRIAL_ROOT/copilot-events.jsonl" \
+            2> "$TRIAL_ROOT/copilot.stderr.txt"
+          status=$?
+          set -e
+          end_ms=$(date +%s%3N)
+          printf '%s\n' "$status" > "$TRIAL_ROOT/copilot.exit-code.txt"
+          printf '%s\n' "$((end_ms - start_ms))" > "$TRIAL_ROOT/wall-time-ms.txt"
+
+          if [ ! -f "$TRIAL_ROOT/transcript.md" ]; then
+            {
+              echo "# Copilot JSONL events"
+              cat "$TRIAL_ROOT/copilot-events.jsonl"
+              echo
+              echo "# Copilot stderr"
+              cat "$TRIAL_ROOT/copilot.stderr.txt"
+            } > "$TRIAL_ROOT/transcript.md"
+          fi
+
+      - name: Build actual causal config and immutable receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRIAL_ROOT="$RUNNER_TEMP/execution-recovery-dev"
+          WORKSPACE="$TRIAL_ROOT/workspace"
+          COPILOT_STATUS=$(cat "$TRIAL_ROOT/copilot.exit-code.txt")
+          COPILOT_VERSION=$(head -n 1 "$TRIAL_ROOT/copilot-version.txt" | tr -d '\r')
+          WALL_TIME_MS=$(cat "$TRIAL_ROOT/wall-time-ms.txt")
+          SESSION_ID=$(cat "$TRIAL_ROOT/session-id.txt")
+          PRE_TREATMENT_STATE_SHA256=$(cat "$TRIAL_ROOT/pre-treatment-state-hash.txt")
+          TRANSPORT_ARCHIVE_SHA256=$(cat "$TRIAL_ROOT/seed-archive-hash.txt")
+          PAIR_ID="gh-${GITHUB_RUN_ID}-${CASE_ID}"
+
+          if [ "$COPILOT_STATUS" != "0" ]; then
+            python - "$TRIAL_ROOT/infrastructure-error.json" "$COPILOT_STATUS" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          pathlib.Path(sys.argv[1]).write_text(
+              json.dumps(
+                  {"kind": "copilot_cli_nonzero_exit", "exit_code": int(sys.argv[2])},
+                  indent=2,
+                  sort_keys=True,
+              ) + "\n",
+              encoding="utf-8",
+          )
+          PY
+            echo "Copilot CLI exited nonzero; preserving raw evidence without behavioral receipt." >&2
+            exit 1
+          fi
+
+          python copilot_event_parser.py attest-runtime \
+            "$TRIAL_ROOT/copilot-events.jsonl" --json \
+            > "$TRIAL_ROOT/runtime-attestation.json"
+
+          ACTUAL_MODEL_ID=$(python - "$TRIAL_ROOT/runtime-attestation.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          attestation = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          model = attestation.get("model")
+          if not isinstance(model, str) or not model.strip():
+              raise SystemExit("runtime attestation missing actual model")
+          print(model)
+          PY
+          )
+
+          python - "$TRIAL_ROOT/metrics.json" "$WALL_TIME_MS" "$TRIAL_ROOT/runtime-attestation.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          attestation = json.loads(pathlib.Path(sys.argv[3]).read_text(encoding="utf-8"))
+          payload = {
+              "input_tokens": None,
+              "output_tokens": None,
+              "tool_calls": attestation["tool_calls"],
+              "wall_time_ms": int(sys.argv[2]),
+          }
+          pathlib.Path(sys.argv[1]).write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+          python - \
+            "$TRIAL_ROOT/run-config.json" \
+            "$CONDITION" \
+            "$TRIAL_ROOT/runtime-attestation.json" \
+            "$TRIAL_ROOT/seed-attestation.json" \
+            "$MODEL_ID" \
+            "$COPILOT_VERSION" \
+            "$HARNESS_ID" \
+            "$GITHUB_RUN_ID" \
+            "$GITHUB_RUN_ATTEMPT" \
+            "$CASE_ID" \
+            "$REPLICATE" \
+            "$SESSION_ID" \
+            "$PRE_TREATMENT_STATE_SHA256" \
+            "$TRANSPORT_ARCHIVE_SHA256" <<'PY'
+          import datetime
+          import json
+          import os
+          import pathlib
+          import sys
+
+          (
+              output,
+              condition,
+              attestation_path,
+              seed_attestation_path,
+              requested_model_id,
+              copilot_version,
+              harness_id,
+              run_id,
+              run_attempt,
+              case_id,
+              replicate,
+              session_id,
+              pre_treatment_state_sha256,
+              transport_archive_sha256,
+          ) = sys.argv[1:]
+          attestation = json.loads(pathlib.Path(attestation_path).read_text(encoding="utf-8"))
+          seed_attestation = json.loads(pathlib.Path(seed_attestation_path).read_text(encoding="utf-8"))
+          is_u1 = condition == "U1"
+          payload = {
+              "schema_version": 1,
+              "matched": {
+                  "prompt_language": "en",
+                  "model": {
+                      "provider": "github-copilot-cli",
+                      "id": attestation["model"],
+                      "requested": requested_model_id,
+                      "snapshot": "provider-managed-unpinned",
+                  },
+                  "harness": {
+                      "id": harness_id,
+                      "version": copilot_version,
+                      "runner_os": os.environ.get("RUNNER_OS", "unknown"),
+                      "runner_arch": os.environ.get("RUNNER_ARCH", "unknown"),
+                  },
+                  "tool_set": attestation["tool_set"],
+                  "tool_policy": {
+                      "allow": "write,shell(python:*)",
+                      "builtin_mcps": False,
+                      "custom_instructions": False,
+                      "agent_cwd": "isolated-runner-temp-workspace",
+                  },
+                  "reasoning_effort": attestation["reasoning_effort"],
+                  "sampling_controls": None,
+                  "limits": {"job_timeout_minutes": 10},
+                  "session_fork": {
+                      "protocol": "copilot-local-session-resume-v3-late-bound-runtime",
+                      "session_id": session_id,
+                      "pre_treatment_state_sha256": pre_treatment_state_sha256,
+                      "transport_archive_sha256": transport_archive_sha256,
+                      "seed_runtime": {
+                          "model": seed_attestation["model"],
+                          "reasoning_effort": seed_attestation["reasoning_effort"],
+                          "tool_set": seed_attestation["tool_set"],
+                      },
+                  },
+              },
+              "intervention": {
+                  "delivery_form": "force-loaded-skill" if is_u1 else "none",
+                  "metadata_language": "en" if is_u1 else None,
+                  "body_language": "en" if is_u1 else None,
+                  "description_variant": "current" if is_u1 else None,
+                  "available_skill_set_sha256": None,
+              },
+              "trial": {
+                  "clean_environment_id": f"gha-{run_id}-attempt-{run_attempt}-{condition}",
+                  "trial_id": f"gha-{run_id}-{case_id}-{condition}-r{replicate}",
+                  "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
+              },
+          }
+          pathlib.Path(output).write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+          python execution_recovery_development.py record \
+            "$CASE_ID" \
+            "$WORKSPACE" \
+            "$TRIAL_ROOT/receipt.json" \
+            --condition "$CONDITION" \
+            --pair-id "$PAIR_ID" \
+            --replicate "$REPLICATE" \
+            --model-id "$ACTUAL_MODEL_ID" \
+            --harness-id "$HARNESS_ID" \
+            --transcript "$TRIAL_ROOT/transcript.md" \
+            --metrics "$TRIAL_ROOT/metrics.json" \
+            --run-config "$TRIAL_ROOT/run-config.json" \
+            --json > "$TRIAL_ROOT/record-output.json"
+
+      - name: Preserve raw development evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: execution-recovery-raw-${{ inputs.case_id }}-${{ matrix.condition }}-r${{ inputs.replicate }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/execution-recovery-dev
+          if-no-files-found: error
+          retention-days: 30
+
+  summarize:
+    if: always()
+    needs: trial
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Initialize pair summary workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/execution-recovery-pair-artifacts" "$RUNNER_TEMP/execution-recovery-pair-summary"
+          echo "summary pending" > "$RUNNER_TEMP/execution-recovery-pair-summary/status.txt"
+
+      - name: Download both raw trial artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: execution-recovery-raw-${{ inputs.case_id }}-*-r${{ inputs.replicate }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/execution-recovery-pair-artifacts
+
+      - name: Summarize matched receipts fail-closed
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          PAIR_ROOT="$RUNNER_TEMP/execution-recovery-pair-artifacts"
+          SUMMARY_ROOT="$RUNNER_TEMP/execution-recovery-pair-summary"
+          mapfile -t receipts < <(find "$PAIR_ROOT" -type f -name receipt.json 2>/dev/null | sort)
+          if [ "${#receipts[@]}" -ne 2 ]; then
+            echo "Expected exactly two development receipts, found ${#receipts[@]}." >&2
+            exit 1
+          fi
+
+          python execution_recovery_development.py summarize "${receipts[@]}" --json \
+            > "$SUMMARY_ROOT/summary.json"
+
+          python - "$SUMMARY_ROOT/summary.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          pairs = payload.get("pairs", [])
+          if len(pairs) != 1:
+              raise SystemExit("expected exactly one paired summary")
+          pair = pairs[0]
+          if not pair.get("comparable", False):
+              raise SystemExit("paired receipts are not comparable")
+          if any(item.get("effect") == "not_comparable" for item in pair.get("replicates", [])):
+              raise SystemExit("not_comparable replicate present")
+          PY
+          echo "summary valid" > "$SUMMARY_ROOT/status.txt"
+
+      - name: Preserve pair summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: execution-recovery-pair-summary-${{ inputs.case_id }}-r${{ inputs.replicate }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/execution-recovery-pair-summary
+          if-no-files-found: error
+          retention-days: 30
