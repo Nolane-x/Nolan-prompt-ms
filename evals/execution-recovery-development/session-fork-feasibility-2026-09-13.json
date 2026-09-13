@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "experiment": "execution-recovery-session-fork-feasibility-v1",
+  "source": {
+    "run_id": 34731466073,
+    "head_sha": "d94e8f3980b72125f5cc826d27603225145b477b",
+    "artifact_id": 10309745927,
+    "artifact_sha256": "bf1a6d7ab1405a5d3a3dd43c00d748c7eb3b79489a963ed205aad9295b9d0459",
+    "copilot_cli_version": "1.0.83"
+  },
+  "decision": {
+    "passed": true,
+    "scope": "infrastructure feasibility only",
+    "behavioral_evidence": false,
+    "runtime_residency": false
+  },
+  "session_id": "e62d8534-d436-4af2-b6ce-b0a81d10d9fb",
+  "runtime_attestation": {
+    "seed": {
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "medium",
+      "tool_calls": 0,
+      "tool_set": ["bash", "glob", "rg", "view"]
+    },
+    "u0": {
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "medium",
+      "tool_calls": 0,
+      "tool_set": ["bash", "glob", "rg", "view"]
+    },
+    "u1": {
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "medium",
+      "tool_calls": 0,
+      "tool_set": ["bash", "glob", "rg", "view"]
+    }
+  },
+  "exit_codes": {
+    "seed": 0,
+    "u0": 0,
+    "u1": 0
+  },
+  "session_state_hashes": {
+    "pre_seed": "b7643b6988fde94f49481ac24933c5a153d999fe333e370d1c3675a0e380f5aa",
+    "pre_u0": "b7643b6988fde94f49481ac24933c5a153d999fe333e370d1c3675a0e380f5aa",
+    "pre_u1": "b7643b6988fde94f49481ac24933c5a153d999fe333e370d1c3675a0e380f5aa",
+    "post_u0": "459545920663932ee116ff92379335481186c34c3f94d6f9535d30d184f49347",
+    "post_u1": "dec53d91563ef617687df779ce589245a6fe33ed22284a6b9aacfa54d3a436a2",
+    "u1_after_u0": "b7643b6988fde94f49481ac24933c5a153d999fe333e370d1c3675a0e380f5aa",
+    "u0_after_u1": "459545920663932ee116ff92379335481186c34c3f94d6f9535d30d184f49347"
+  },
+  "checks": {
+    "seed_succeeded": true,
+    "session_id_present": true,
+    "local_seed_state_present": true,
+    "u0_resume_succeeded": true,
+    "u1_resume_succeeded": true,
+    "model_identity_preserved": true,
+    "reasoning_identity_preserved": true,
+    "tool_set_identity_preserved": true,
+    "pre_treatment_state_identical": true,
+    "u0_state_mutated_after_resume": true,
+    "u1_state_mutated_after_resume": true,
+    "fork_histories_diverged": true,
+    "u1_untouched_by_u0": true,
+    "u0_untouched_by_u1": true
+  },
+  "note": "The spike exposes no development fixture and produces no behavioral treatment estimate. It only proves that a provider-selected runtime can be assigned before treatment, cloned locally, and resumed under isolated treatment-shaped continuations without runtime identity drift in the observed configuration."
+}
