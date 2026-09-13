@@ -14,7 +14,7 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch fresh temporal pressure replicate 1
+      - name: Dispatch fresh temporal pressure replicate 2 on explicit public model
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -24,14 +24,14 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
             -f case_id=temporal-supersession \
-            -f model=auto \
+            -f model=gpt-5.4 \
             -f reasoning_effort=default \
-            -f replicate=1
+            -f replicate=2
 
           gh workflow run execution-recovery-development.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
             -f case_id=temporal-continuity-control \
-            -f model=auto \
+            -f model=gpt-5.4 \
             -f reasoning_effort=default \
-            -f replicate=1
+            -f replicate=2
