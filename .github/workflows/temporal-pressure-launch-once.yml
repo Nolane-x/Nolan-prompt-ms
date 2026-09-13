@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  interactive-model-picker-probe:
+  screenreader-model-picker-probe:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -18,7 +18,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - name: Capture entitlement-aware /model picker without running a task
+      - name: Capture entitlement-aware /model picker in screen-reader mode
         shell: bash
         run: |
           set -euo pipefail
@@ -32,10 +32,22 @@ jobs:
           }
           JSON
           set +e
-          printf '/model\n' | timeout -s INT 12s script -qefc "copilot -C '$ROOT/workspace' --disable-builtin-mcps --no-custom-instructions --no-experimental --no-remote --no-remote-export --no-auto-update" "$ROOT/typescript.txt"
+          printf '/model\n' | timeout -s INT 12s copilot \
+            -C "$ROOT/workspace" \
+            --screen-reader \
+            --disable-builtin-mcps \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            > "$ROOT/stdout.txt" \
+            2> "$ROOT/stderr.txt"
           status=$?
           set -e
           echo "probe_exit_code=$status"
-          echo '=== MODEL PICKER TYPESCRIPT ==='
-          cat -v "$ROOT/typescript.txt"
+          echo '=== STDOUT ==='
+          cat "$ROOT/stdout.txt"
+          echo '=== STDERR ==='
+          cat "$ROOT/stderr.txt"
           exit 0
