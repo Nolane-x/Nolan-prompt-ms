@@ -186,7 +186,19 @@ jobs:
           FROZEN_SESSION_DIR="$FROZEN_HOME/session-state/$SESSION_ID"
           test -d "$FROZEN_SESSION_DIR"
 
-          python - "$FROZEN_SESSION_DIR" "$ROOT/seed-state-hash.txt" <<'PY'
+          ARCHIVE="$ROOT/frozen-seed-home.tar"
+          tar --exclude="./session-state/$SESSION_ID/inuse.*.lock" \
+            -C "$FROZEN_HOME" -cf "$ARCHIVE" .
+          sha256sum "$ARCHIVE" | awk '{print $1}' > "$ROOT/seed-archive-hash.txt"
+
+          VERIFY_HOME="$ROOT/archive-verification-home"
+          rm -rf "$VERIFY_HOME"
+          mkdir -p "$VERIFY_HOME"
+          tar -xf "$ARCHIVE" -C "$VERIFY_HOME"
+          VERIFIED_SESSION_DIR="$VERIFY_HOME/session-state/$SESSION_ID"
+          test -d "$VERIFIED_SESSION_DIR"
+
+          python - "$VERIFIED_SESSION_DIR" "$ROOT/seed-state-hash.txt" <<'PY'
           import hashlib
           import pathlib
           import sys
@@ -205,9 +217,20 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: execution-recovery-seed-${{ github.run_id }}
-          path: ${{ runner.temp }}/execution-recovery-seed
+          path: |
+            ${{ runner.temp }}/execution-recovery-seed/frozen-seed-home.tar
+            ${{ runner.temp }}/execution-recovery-seed/seed-archive-hash.txt
+            ${{ runner.temp }}/execution-recovery-seed/session-id.txt
+            ${{ runner.temp }}/execution-recovery-seed/seed-attestation.json
+            ${{ runner.temp }}/execution-recovery-seed/seed-state-hash.txt
+            ${{ runner.temp }}/execution-recovery-seed/copilot-version.txt
+            ${{ runner.temp }}/execution-recovery-seed/seed-events.jsonl
+            ${{ runner.temp }}/execution-recovery-seed/seed.stderr.txt
+            ${{ runner.temp }}/execution-recovery-seed/seed.exit-code.txt
+            ${{ runner.temp }}/execution-recovery-seed/prompt.txt
           if-no-files-found: error
           retention-days: 30
+          include-hidden-files: false
 
   trial:
     needs: [validate, resolve, seed]
@@ -226,7 +249,7 @@ jobs:
       MODEL_ID: ${{ inputs.model }}
       REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       REPLICATE: ${{ inputs.replicate }}
-      HARNESS_ID: github-copilot-execution-recovery-dev-v2-session-fork
+      HARNESS_ID: github-copilot-execution-recovery-dev-v3-tar-session-fork
       GITHUB_TOKEN: ${{ github.token }}
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
@@ -249,14 +272,23 @@ jobs:
         run: |
           set -euo pipefail
           SEED_ROOT="$RUNNER_TEMP/execution-recovery-seed-artifact"
-          SEED_SOURCE="$SEED_ROOT/frozen-seed-home"
+          SEED_ARCHIVE="$SEED_ROOT/frozen-seed-home.tar"
           TRIAL_ROOT="$RUNNER_TEMP/execution-recovery-dev"
           COPILOT_HOME="$TRIAL_ROOT/copilot-home"
           mkdir -p "$TRIAL_ROOT" "$COPILOT_HOME"
-          cp -a "$SEED_SOURCE/." "$COPILOT_HOME/"
+
+          EXPECTED_ARCHIVE_SHA256=$(cat "$SEED_ROOT/seed-archive-hash.txt")
+          ACTUAL_ARCHIVE_SHA256=$(sha256sum "$SEED_ARCHIVE" | awk '{print $1}')
+          if [ "$ACTUAL_ARCHIVE_SHA256" != "$EXPECTED_ARCHIVE_SHA256" ]; then
+            echo "session fork archive hash mismatch" >&2
+            exit 1
+          fi
+          tar -xf "$SEED_ARCHIVE" -C "$COPILOT_HOME"
+
           cp "$SEED_ROOT/session-id.txt" "$TRIAL_ROOT/session-id.txt"
           cp "$SEED_ROOT/seed-attestation.json" "$TRIAL_ROOT/seed-attestation.json"
           cp "$SEED_ROOT/seed-state-hash.txt" "$TRIAL_ROOT/seed-state-hash.txt"
+          cp "$SEED_ROOT/seed-archive-hash.txt" "$TRIAL_ROOT/seed-archive-hash.txt"
           cp "$SEED_ROOT/copilot-version.txt" "$TRIAL_ROOT/seed-copilot-version.txt"
 
           SESSION_ID=$(cat "$TRIAL_ROOT/session-id.txt")
@@ -379,6 +411,7 @@ jobs:
           WALL_TIME_MS=$(cat "$TRIAL_ROOT/wall-time-ms.txt")
           SESSION_ID=$(cat "$TRIAL_ROOT/session-id.txt")
           PRE_TREATMENT_STATE_SHA256=$(cat "$TRIAL_ROOT/pre-treatment-state-hash.txt")
+          TRANSPORT_ARCHIVE_SHA256=$(cat "$TRIAL_ROOT/seed-archive-hash.txt")
           PAIR_ID="gh-${GITHUB_RUN_ID}-${CASE_ID}"
 
           if [ "$COPILOT_STATUS" != "0" ]; then
@@ -464,7 +497,8 @@ jobs:
             "$CASE_ID" \
             "$REPLICATE" \
             "$SESSION_ID" \
-            "$PRE_TREATMENT_STATE_SHA256" <<'PY'
+            "$PRE_TREATMENT_STATE_SHA256" \
+            "$TRANSPORT_ARCHIVE_SHA256" <<'PY'
           import datetime
           import json
           import os
@@ -484,6 +518,7 @@ jobs:
               replicate,
               session_id,
               pre_treatment_state_sha256,
+              transport_archive_sha256,
           ) = sys.argv[1:]
           attestation = json.loads(pathlib.Path(attestation_path).read_text(encoding="utf-8"))
           is_u1 = condition == "U1"
@@ -514,9 +549,10 @@ jobs:
                   "sampling_controls": None,
                   "limits": {"job_timeout_minutes": 10},
                   "session_fork": {
-                      "protocol": "copilot-local-session-resume-v1",
+                      "protocol": "copilot-local-session-resume-v2-tar",
                       "session_id": session_id,
                       "pre_treatment_state_sha256": pre_treatment_state_sha256,
+                      "transport_archive_sha256": transport_archive_sha256,
                   },
               },
               "intervention": {
