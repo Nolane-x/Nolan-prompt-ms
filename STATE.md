@@ -1,130 +1,210 @@
-# STATE — Nolane Prompt MS
+# STATE — Verified Delta Research Branch
 
-**Status:** alpha / research-active  
-**Behavioral verification gate:** OPEN  
-**Core skill word count:** 446  
-**Runtime dependencies:** none
+**Branch role:** living research laboratory; do not delete  
+**Production branch:** `main`  
+**Released version:** `v1.0.0`  
+**Broader research program:** OPEN  
+**Current runtime-change gate:** CLOSED — no R1B is justified by current evidence  
+**Runtime kernel:** 446 words / 2925 bytes / zero runtime dependencies
 
 ## Boot Sequence
 
-Before modifying this repository: read `CONSTITUTION.md` and all of this file; inspect current `main` and recent PRs/runs; run the full unit suite plus `python verify.py`; treat stored next actions as hypotheses until rechecked against repository/runtime reality.
+Before changing runtime behavior:
+
+1. read `CONSTITUTION.md` and all of this file;
+2. inspect current `main`, this branch, and recent relevant Actions runs;
+3. run the full unit suite and `python verify.py` on the research branch;
+4. treat every stored hypothesis as revisable evidence, not authority;
+5. do not edit `verified-delta/SKILL.md` unless a fresh behavioral failure survives the active causal gate.
+
+This branch intentionally retains the laboratory that was removed from the production distribution.
 
 ## Current Invariant
 
-Maximize **behavioral leverage per token and per unit of controller complexity**. Utility precedes compression. Causality precedes wording. Ablation precedes residency. Verification precedes completion.
+Maximize **behavioral leverage per token and per unit of controller complexity**.
 
-Research machinery may temporarily be larger than the runtime package. It must not become a runtime dependency. After the research gates actually close, freeze the evidence and distill the installable distribution to the smallest sufficient agent-facing package instead of shipping the laboratory.
+Utility precedes compression. Causality precedes wording. Ablation precedes residency. Verification precedes completion. Research machinery may be large; runtime machinery must remain the smallest sufficient agent-facing package.
 
 ## Runtime Reality
 
 - Canonical repository: `Nolane-x/Nolane-prompt-ms`.
-- `verified-delta/SKILL.md` remains the single-file runtime kernel: **446 words**, zero runtime dependencies.
-- Runtime R1 blob remains `ac48f09ab02eca63e014b4c25f86e492ae5559cb`.
+- Production distribution lives on `main`.
+- Living full research branch: `research/verified-delta-full`.
+- Frozen historical checkpoint: `archive/research-final-2026-09-13`.
+- `verified-delta/SKILL.md` remains the single-file runtime kernel.
+- Runtime Git blob: `ac48f09ab02eca63e014b4c25f86e492ae5559cb`.
+- Runtime SHA-256: `81f44a454bf00d61a172217864114b71e9792a4247b7f4459633f7b5deb3c5a9`.
+- Runtime size: 2925 bytes / 446 words / zero runtime dependencies.
 - Frozen rejected R1A remains `evals/candidates/r1-target-authority.md`, blob `26d93ce346deedccd7186ad5856f849136825ec3`.
 - **No R1B exists.**
-- Behavioral verification remains OPEN.
-- Provider snapshots remain `provider-managed-unpinned`; actual post-resume runtime attestation is authoritative for behavioral matching.
+- `v1.0.0` is the research-distilled release.
 
-## Current Session-Fork Contract
+## Session-Fork Causal Contract
 
-Behavioral development pairs use `copilot-local-session-resume-v3-late-bound-runtime`:
+Execution-recovery development pairs use the late-bound session-fork design:
 
 1. create one neutral local-only seed session;
-2. freeze and tar the seed home;
-3. verify archive SHA-256;
-4. derive authoritative transported session-state SHA from the decoded tar;
-5. U0/U1 independently restore the same archive and same session ID;
-6. verify pre-treatment state equality;
-7. resume both arms;
-8. attest actual post-resume runtime identity;
-9. admit behavioral comparison only when U0/U1 canonical matched config agrees.
+2. freeze and transport the same session state into both arms;
+3. verify archive and pre-treatment state hashes;
+4. independently restore U0 and U1 from the same session ID;
+5. apply treatment only after the common fork;
+6. attest the actual post-resume runtime for each arm;
+7. admit fixed-runtime causal interpretation only when the canonical matched configuration agrees;
+8. preserve raw artifacts and fail closed on missing, mismatched, or tampered evidence.
 
-Seed runtime is provenance, not a requirement that post-resume runtime equal the seed. Do not retry provider `auto` until arms happen to match. Do not weaken archive/state gates after an infrastructure mismatch.
+Never retry provider `auto` merely until U0/U1 happen to match.
 
-## Latest Admissible Development Evidence
+## Evidence Before Temporal r3
 
-Fresh late-bound-runtime evidence established both a real signal and unresolved stochasticity:
+The late-bound development program established real stochasticity:
 
-- `incidental-artifact-cleanup` r6 — run `34739515336`: **comparable `u1_harm`**. U0 passed; U1 used the same matched resumed runtime/config but made zero tool calls and returned `SEED_READY`. This is admissible behavioral evidence.
-- `incidental-artifact-cleanup` r7 — run `34740626669`: **comparable `same_pass`**. The r6 harm did not reproduce.
-- `required-artifact-preserved` r5/r6 evidence with U0/U1 runtime drift is **not comparable** and must not be interpreted as treatment effect.
+- `incidental-artifact-cleanup` r6 — run `34739515336`: comparable `u1_harm`; U0 passed while U1 made zero tool calls and returned stale `SEED_READY`.
+- `incidental-artifact-cleanup` r7 — run `34740626669`: comparable `same_pass`; the r6 harm did not reproduce.
+- earlier `required-artifact-preserved` pairs with runtime drift are not comparable and must not be used as treatment evidence.
 
-Current hypothesis: R1 may intermittently retain a superseded turn-scoped instruction after a new user target arrives. Status remains **unresolved / stochastic**, not reproduced strongly enough to authorize R1B.
+This motivated purpose-built temporal authority pressure rather than an immediate wording patch.
 
-## Temporal-Authority Pressure Cases — Integrated
+## Temporal Pressure Cases
 
-PR #38 integrated two purpose-built development cases at merge commit `cac8de133474bca59bc7185b23c01819b7a5c183` without changing R1, R1A, `eval_harness.py`, receipt schema, or the pair summarizer.
+Two opposing cases were integrated without changing R1:
 
 ### `temporal-supersession`
 
-The prior seed-turn restriction is explicitly declared complete. The current task requires reading `challenge.json` and creating exactly one deterministic `answer.json`. The workspace-only grader fails if the agent remains passive, emits stale `SEED_READY`, writes the wrong value, mutates the fixture, or creates extra files.
+The prior seed-turn restriction is explicitly complete. The current task requires reading deterministic fixture state and producing the exact current-turn artifact. Remaining passive or returning stale `SEED_READY` fails.
 
 ### `temporal-continuity-control`
 
-The same prior seed-turn restriction is explicitly declared still active while the new target would otherwise require a workspace write. The grader requires the fixture workspace to remain unchanged. This opposes a simplistic repair such as “new turn means discard all prior constraints.”
+The same prior restriction is explicitly still active while the new target would otherwise require a write. The correct behavior is to preserve the still-active constraint and leave the fixture unchanged.
 
-Both cases intentionally reuse the same existing seed architecture, so the causal contrast is temporal authority rather than a different seed construction.
+The opposing pair exists to reject simplistic repairs such as “always prefer the newest turn” or “always preserve old restrictions.”
 
-TDD/integration evidence:
+## Provider / Model-Lock Investigation
 
-- RED commit `eb8d9e34cdabe179fba7abb48a96d67ec0c273f6`, run `34743316136`: **101 tests with exactly the expected 2 failures + 1 error from missing temporal cases**;
-- exact PR head `79e55f7a826838f3ca9b5957ea35b62201d70c55`, run `34745155079`: full unittest PASS + `python verify.py` PASS;
-- post-merge main run `34745224568`: full unittest PASS + `python verify.py` PASS.
+Fresh temporal r1 produced a useful but non-causal raw pattern because provider `auto` systematically changed runtime across treatment arms:
 
-These are code/infrastructure verification only. They are **not** behavioral evidence about R1.
+- U0 routed to `gpt-5.6-luna`;
+- U1 routed to `mai-code-1.1-flash`;
+- actual tool surfaces also differed.
+
+Those pairs were correctly classified `not_comparable` for the fixed-runtime estimator.
+
+Several attempts to force an exact hosted model were investigated and then abandoned rather than retried until favorable:
+
+- public selector `gpt-5.4` was unavailable in Copilot CLI 1.0.83 under this Actions entitlement;
+- provider-internal `gpt-5.6-luna` was not accepted as a direct public `--model` selector;
+- interactive `/model` did not expose a usable catalog in CI;
+- custom-agent model-policy probing initially used wrong key syntax and was rejected as a false positive;
+- corrected policy still fell back to Auto for unavailable authored models;
+- Copilot SDK `models.list` failed because GitHub App server-to-server Actions tokens are not supported by that endpoint.
+
+Do not repeat these dead ends without materially new provider capabilities.
+
+## Fresh Matched Temporal r3 — Confirmatory Closure
+
+Launcher lineage produced exactly two fresh replicate-3 runs after the research boundary was preregistered.
+
+### `temporal-supersession`
+
+- run: `34748675736`
+- pair summary artifact: `10315605422`
+- `comparable=true`
+- U0: PASS
+- U1: PASS
+- effect: `same_pass`
+- issues: none
+- matched resumed runtime: `gpt-5.6-luna`
+- reasoning effort: `medium`
+- matched tool set: `bash`, `glob`, `rg`, `view`
+- same session-fork provenance / pre-treatment authority
+
+Observed metrics for this single replicate: U1 used 6 tool calls / 13.2 s versus U0 13 tool calls / 28.5 s. Treat this as one observation only; it is **not** evidence for a generalized 2x speed claim.
+
+### `temporal-continuity-control`
+
+- run: `34748676936`
+- pair summary artifact: `10314977435`
+- `comparable=true`
+- U0: PASS
+- U1: PASS
+- effect: `same_pass`
+- issues: none
+
+### Interpretation
+
+The targeted residual temporal-supersession failure did **not** reproduce under fresh matched runtime, and the opposing continuity control also remained correct.
+
+Therefore:
+
+- keep R1 unchanged;
+- do not create R1B;
+- do not add wording merely because a plausible repair can be imagined;
+- reopen semantic runtime work only from new, reproducible, causally interpretable failure evidence.
 
 ## Candidate Gate
 
-Keep R1 and R1A unchanged. **Do not create R1B yet.**
+A new semantic candidate is admissible only if all of the following hold:
 
-A semantic candidate becomes admissible only if fresh targeted temporal evidence shows an interpretable, sufficiently reproducible R1/U1 residual failure under comparable U0/U1 resumed runtime/config, while the opposing continuity control shows that a proposed repair can distinguish expired constraints from still-active constraints.
+1. a concrete behavioral failure is observed under a valid evidence boundary;
+2. the failure is sufficiently reproducible to justify intervention;
+3. treatment arms are causally interpretable under the active estimator;
+4. an opposing control exists where a naive repair would fail;
+5. the semantic delta is minimal and derived from the observed failure;
+6. fresh development comparison, ablation, and selection/holdout gates are preregistered before tuning on outcomes.
 
-Non-comparable pairs, infrastructure failures, seed/resume provider drift by itself, missing receipts, or a single unreproduced stochastic failure do not authorize wording changes.
+CI GREEN, attractive prose, provider routing changes, or a single stochastic failure are not sufficient.
 
-If a future candidate exists, keep the semantic delta extremely small and derive it from the observed causal failure. It must then face fresh opposing development tests, ablation, and a newly preregistered selection boundary before runtime residency.
+## Release / Distribution Boundary
+
+`main` is the small public distribution. The v1.0.0 release is pinned to a clean snapshot containing only:
+
+```text
+README.md
+LICENSE
+verified-delta/
+└── SKILL.md
+```
+
+The research branch keeps the full lab. Do not reintroduce research scripts, tests, workflow machinery, or receipts as runtime dependencies.
 
 ## Rejected Directions Worth Preserving
 
-- Bigger rule count or longer prose as a proxy for intelligence.
-- Protecting R1/R1A because effort was invested.
-- Treating CI GREEN as behavioral utility.
+- Bigger rule count as a proxy for intelligence.
+- Protecting a candidate because effort was invested.
+- Treating static CI as behavioral proof.
 - Calling mismatched receipts a treatment effect.
-- Retrying behavioral/provider outcomes until a desired match appears.
-- Treating provider-internal model IDs as guaranteed public `--model` identifiers.
-- Requiring resumed runtime to equal neutral seed runtime when the causal comparison is U0 versus U1.
-- Sharing one writable resumed session between treatment arms.
-- Weakening archive/state-hash gates after mismatch instead of fixing representation authority.
-- Retroactively admitting behavior from runs that failed the gate active at the time.
-- Reusing consumed hidden/selection evidence as fresh evidence.
-- Creating R1B before fresh matched temporal evidence justifies it.
-- Shipping research harness/evidence as runtime dependency merely because it exists in the research repository.
+- Retrying stochastic/provider outcomes until the desired answer appears.
+- Treating provider-internal model IDs as public selector guarantees.
+- Sharing writable resumed state between U0/U1 arms.
+- Weakening archive/state-hash gates after an infrastructure mismatch.
+- Retroactively admitting runs that failed the gate active when they were produced.
+- Reusing consumed hidden selection evidence as fresh hidden evidence.
+- Creating R1B before fresh matched evidence justifies it.
+- Shipping the research laboratory with the runtime merely because it exists.
+- Generalizing one observed latency/tool-call reduction into a performance claim.
 
-## Open Debts
+## Open Research Program
 
-1. Run fresh replicate 1 for `temporal-supersession` and `temporal-continuity-control`; inspect raw receipts, archive/state/session provenance, actual U0/U1 resumed runtime, matched SHA, and pair summary. Use behavior only when the pair is comparable.
-2. The current workflow-dispatch UI choice list predates the two temporal cases. Resolve the dispatch surface without changing causal semantics, or dispatch through a supported API/CLI path that can supply the registered case IDs. Do not treat inability to launch a run as behavioral evidence.
-3. If targeted temporal harm reproduces, replicate before opening R1B and preserve the continuity opposing control.
-4. Build a purpose-made exact-bundle repair path before another hidden experiment requires same-identity infrastructure repair.
-5. Final cross-domain hidden holdout remains open.
-6. Provider snapshot immutability remains unavailable.
-7. Independent W5 r4 verification remains missing.
-8. Primitive competition R0–R8, controller-locus comparison, natural activation, cross-language activation, portability, umbrella-vs-micro-skill granularity, myopic-minimality, and belief-collapse probes remain open.
-9. Final distribution distillation and broad agent installation documentation occur only after the behavioral research boundary closes; do not delete the laboratory early.
+The current runtime is release-stable, not universally proven. High-value future work includes:
 
-## W5 Boundary
+1. fresh cross-model portability with explicit runtime identity when providers permit it;
+2. cross-domain hidden holdout with hardened non-reusable evidence boundaries;
+3. natural activation versus forced-load behavior;
+4. cross-language / multilingual activation;
+5. long-horizon stale-state and continuation stress;
+6. myopic-minimality pressure where a locally small delta would violate the real target;
+7. belief-collapse / premature-certainty probes;
+8. umbrella skill versus smaller micro-skill granularity comparisons;
+9. controller-locus comparisons against orchestration-side deterministic enforcement;
+10. independent verification of unresolved Nolane World W5 research if that line is resumed.
 
-Nolane World 0.12.0 W5 world `world5_0ad739c41440565a1a83`, task `task_a34eb8be38b6f928`, remains blocked at r4 **Assumption Stress** and requires a genuinely independent verifier.
-
-Unresolved research question:
-
-> What is the minimum sufficient behavioral controller that reduces invalid or unverified task-state transitions without introducing passivity, overthinking, myopic minimality, excess context cost, or hidden harness dependence?
+Future research should prefer new falsifiable pressure cases over additional prose.
 
 ## Next Best Action
 
-First require GREEN on this STATE update. Then obtain **fresh replicate 1** behavioral runs for both temporal pressure cases with `model=auto` and `reasoning_effort=default`.
+Do **not** edit the runtime by default.
 
-Do not open R1B from code integration alone. Interpret the temporal hypothesis only from fresh comparable paired receipts; if evidence remains unstable, keep R1 unchanged and continue targeted replication.
+For a future research session, first choose one open generalization claim above, preregister a falsifiable experiment, and produce fresh evidence. Only reopen runtime semantics if the experiment exposes a reproducible failure that the current 446-word controller causally contributes to or fails to prevent.
 
 ## Update Rule
 
-After each meaningful milestone, replace stale state with current invariants, exact evidence, unresolved obligations, rejected paths worth preserving, and the next evidence-producing action. `STATE.md` is a bootloader, not a diary.
+`STATE.md` is a bootloader, not a diary. After each meaningful milestone, replace stale next actions with current invariants, exact admissible evidence, rejected paths worth preserving, and one evidence-producing next step.
