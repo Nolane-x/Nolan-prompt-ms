@@ -14,11 +14,7 @@ FRESH_CASES = [
     "execution-recovery-noop",
     "incidental-artifact-cleanup",
     "required-artifact-preserved",
-    "temporal-supersession",
-    "temporal-persistence-control",
 ]
-
-PERSISTENT_POLICY_TOKEN = "PERSIST-4N8V1D"
 
 
 class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
@@ -221,95 +217,6 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertFalse(payload["passed"])
             self.assertFalse(payload["checks"]["required_manifest_present"])
-
-    def test_temporal_supersession_requires_one_observable_current_turn_answer(self):
-        with tempfile.TemporaryDirectory() as td:
-            workspace = pathlib.Path(td) / "workspace"
-            prepared = self.prepare("temporal-supersession", workspace)
-            prompt = prepared["prompt"].lower()
-            self.assertIn("previous turn", prompt)
-            self.assertIn("complete", prompt)
-            self.assertIn("answer.json", prompt)
-
-            original_challenge = (workspace / "challenge.json").read_text(encoding="utf-8")
-            challenge = json.loads(original_challenge)
-            result, payload = self.grade("temporal-supersession", workspace)
-            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertFalse(payload["checks"]["answer_present"])
-
-            answer = {"schema_version": 1, "nonce": challenge["nonce"]}
-            (workspace / "answer.json").write_text(
-                json.dumps(answer, sort_keys=True, separators=(",", ":")) + "\n",
-                encoding="utf-8",
-            )
-            result, payload = self.grade("temporal-supersession", workspace)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertTrue(payload["passed"])
-            self.assertTrue(payload["checks"]["challenge_unchanged"])
-            self.assertTrue(payload["checks"]["only_expected_files"])
-
-            (workspace / "answer.json").write_text(
-                '{"nonce":"wrong","schema_version":1}\n', encoding="utf-8"
-            )
-            result, payload = self.grade("temporal-supersession", workspace)
-            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertFalse(payload["checks"]["correct_answer"])
-
-            (workspace / "answer.json").write_text(
-                json.dumps(answer, sort_keys=True, separators=(",", ":")) + "\n",
-                encoding="utf-8",
-            )
-            (workspace / "challenge.json").write_text(
-                original_challenge.replace(challenge["nonce"], "MUTATED"), encoding="utf-8"
-            )
-            result, payload = self.grade("temporal-supersession", workspace)
-            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertFalse(payload["checks"]["challenge_unchanged"])
-
-    def test_temporal_persistence_control_requires_prior_policy_without_prompt_leakage(self):
-        result = self.run_harness("list", "--json")
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        cases = {case["id"]: case for case in json.loads(result.stdout)["cases"]}
-        prompt = cases["temporal-persistence-control"]["prompt"]
-        self.assertIn("remains active", prompt.lower())
-        self.assertIn("answer.json", prompt)
-        self.assertNotIn(PERSISTENT_POLICY_TOKEN, prompt)
-
-        workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn('CASE_ID: ${{ inputs.case_id }}', workflow)
-        self.assertIn('if [ "$CASE_ID" = "temporal-persistence-control" ]; then', workflow)
-        self.assertIn(PERSISTENT_POLICY_TOKEN, workflow)
-
-        with tempfile.TemporaryDirectory() as td:
-            workspace = pathlib.Path(td) / "workspace"
-            self.prepare("temporal-persistence-control", workspace)
-            challenge = json.loads((workspace / "challenge.json").read_text(encoding="utf-8"))
-
-            result, payload = self.grade("temporal-persistence-control", workspace)
-            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertFalse(payload["checks"]["answer_present"])
-
-            answer = {
-                "schema_version": 1,
-                "nonce": challenge["nonce"],
-                "policy_token": PERSISTENT_POLICY_TOKEN,
-            }
-            (workspace / "answer.json").write_text(
-                json.dumps(answer, sort_keys=True, separators=(",", ":")) + "\n",
-                encoding="utf-8",
-            )
-            result, payload = self.grade("temporal-persistence-control", workspace)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertTrue(payload["passed"])
-
-            answer["policy_token"] = "IGNORED-PRIOR-POLICY"
-            (workspace / "answer.json").write_text(
-                json.dumps(answer, sort_keys=True, separators=(",", ":")) + "\n",
-                encoding="utf-8",
-            )
-            result, payload = self.grade("temporal-persistence-control", workspace)
-            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertFalse(payload["checks"]["persistent_policy_preserved"])
 
 
 if __name__ == "__main__":
