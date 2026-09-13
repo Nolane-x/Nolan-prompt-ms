@@ -1,0 +1,10 @@
+name: temporary-research-bridge-stub
+
+on:
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo bridge-stub
