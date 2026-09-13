@@ -86,15 +86,19 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
         for needle in [
             '"remoteExport": false',
             'PRE_TREATMENT_STATE_SHA256',
-            'seed["model"] != attestation["model"]',
-            'seed["reasoning_effort"] != attestation["reasoning_effort"]',
-            'seed["tool_set"] != attestation["tool_set"]',
             '"session_fork": {',
             '"session_id": session_id',
             '"pre_treatment_state_sha256": pre_treatment_state_sha256',
+            '"seed_runtime": {',
+            '"model": seed_attestation["model"]',
+            '"reasoning_effort": seed_attestation["reasoning_effort"]',
+            '"tool_set": seed_attestation["tool_set"]',
         ]:
             self.assertIn(needle, workflow)
-        self.assertIn("session fork runtime mismatch", workflow)
+        self.assertNotIn('seed["model"] != attestation["model"]', workflow)
+        self.assertNotIn('seed["reasoning_effort"] != attestation["reasoning_effort"]', workflow)
+        self.assertNotIn('seed["tool_set"] != attestation["tool_set"]', workflow)
+        self.assertNotIn("session fork runtime mismatch", workflow)
         self.assertIn("session fork state hash mismatch", workflow)
         self.assertIn("if: always()", workflow)
 
@@ -128,7 +132,7 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
         self.assertIn('SEED_ARCHIVE="$SEED_ROOT/frozen-seed-home.tar"', trial_block)
         self.assertIn('session fork archive hash mismatch', trial_block)
         self.assertIn('tar -xf "$SEED_ARCHIVE" -C "$COPILOT_HOME"', trial_block)
-        self.assertIn('copilot-local-session-resume-v2-tar', trial_block)
+        self.assertIn('copilot-local-session-resume-v3-late-bound-runtime', trial_block)
         self.assertIn(
             '"transport_archive_sha256": transport_archive_sha256',
             trial_block,
