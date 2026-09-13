@@ -10,14 +10,48 @@ permissions:
   contents: read
 
 jobs:
-  model-surface-probe:
+  explicit-luna-capability-probe:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      copilot-requests: write
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - name: Inspect exact Copilot CLI model surface without inference
+      - name: Test explicit gpt-5.6-luna selector on neutral prompt only
         shell: bash
         run: |
           set -euo pipefail
           npm install -g "@github/copilot@1.0.83"
-          copilot --version
-          echo '=== COPILOT HELP ==='
-          copilot --help
+          ROOT="$RUNNER_TEMP/luna-selector-probe"
+          export COPILOT_HOME="$ROOT/copilot-home"
+          mkdir -p "$COPILOT_HOME" "$ROOT/workspace"
+          cat > "$COPILOT_HOME/settings.json" <<'JSON'
+          {
+            "remoteExport": false
+          }
+          JSON
+          set +e
+          copilot \
+            -C "$ROOT/workspace" \
+            --prompt='Return exactly MODEL_READY. Do not inspect or modify files.' \
+            --model='gpt-5.6-luna' \
+            --output-format=json \
+            --available-tools='view' \
+            --disable-builtin-mcps \
+            --no-ask-user \
+            --no-custom-instructions \
+            --no-experimental \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            > "$ROOT/events.jsonl" \
+            2> "$ROOT/stderr.txt"
+          status=$?
+          set -e
+          echo "exit_code=$status"
+          echo '=== STDERR ==='
+          cat "$ROOT/stderr.txt"
+          echo '=== EVENTS ==='
+          cat "$ROOT/events.jsonl"
+          exit "$status"
