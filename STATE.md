@@ -71,51 +71,42 @@ All three pre-treatment session-state hashes were `b7643b6988fde94f49481ac24933c
 
 ## Production Session-Fork Migration — Integrated
 
-PR #33 merged the clean production migration into `main` as `7a68919677f2e3b37ece65c7ea1cd380999dc559`. The development workflow now creates a neutral seed before treatment, transfers local session state through one immutable artifact, resumes both treatment arms without explicit model/reasoning flags, attests actual post-resume runtime identity, and binds the common session-fork identity into matched run-config receipts.
+PR #33 merged the production session-fork architecture into `main` as `7a68919677f2e3b37ece65c7ea1cd380999dc559`. The workflow creates a neutral seed before treatment, transfers local session state through an artifact, resumes both treatment arms without explicit model/reasoning flags, attests actual post-resume runtime identity, and binds common session-fork identity into matched run-config receipts.
 
-Migration verification:
-
-- RED commit `49b0e9da0e1d72896dbc58b4bd66b5cb11033203`, run `34731613939`: **97 tests with exactly 2 intended session-fork contract failures**;
-- implementation commit `8a2853270874ddc1cf5ca80170c580e5abf668c5`, run `34731679823`: **97/97 tests PASS + `python verify.py` PASS**;
-- state-head run `34731740508`: GREEN;
-- exact PR #33 run `34731772462`: GREEN;
-- post-merge run `34731792178` on `main@7a68919677f2e3b37ece65c7ea1cd380999dc559`: GREEN;
-- final state run `34731834564` on `main@196a861030cc865e371d50742402126324850cc7`: GREEN.
+Migration verification included exact PR run `34731772462`, post-merge run `34731792178`, and final state run `34731834564`, all GREEN.
 
 ## First Cross-Runner Production Attempt — Infrastructure-Only TOCTOU Failure
 
-Fresh dispatches from `main@196a861030cc865e371d50742402126324850cc7` were intentionally evaluated before any behavioral interpretation:
+Fresh dispatches from `main@196a861030cc865e371d50742402126324850cc7` were intentionally evaluated before behavioral interpretation:
 
 - `incidental-artifact-cleanup` r3, run `34732880632`;
 - `required-artifact-preserved` r2, run `34732882721`.
 
 Both seed jobs succeeded. In all four treatment arms, `Clone and verify pre-treatment session fork before treatment` failed with `session fork state hash mismatch`; treatment prompt construction, Copilot resume/inference, receipt generation, and grading were all skipped. These runs contain **zero behavioral evidence** and have no effect on the candidate gate.
 
-Forensic artifact comparison localized a reproducible TOCTOU bug in the workflow rather than artifact corruption:
+Forensic artifact comparison localized a reproducible TOCTOU bug rather than artifact corruption:
 
-- cleanup r3 stored seed hash `2f1b30f9305b7e0dd3e1185a4230d20bfb4afbbd3fdb989cc37b61a5ca3e41f2`, while both the transferred seed artifact and U0 clone had actual session-state hash `bf305f25776e9bde4edd043d28ff1de681f5bd3cf816305e8ae231d702add693`;
-- required-artifact r2 stored seed hash `3940bbf0731dc0fea9f789880ae8805b365a090c89527fd166994184ecb0e495`, while both the transferred seed artifact and U0 clone had actual hash `7a0c050e24dca757224e22cf3a52c1d59551a6064347ef50f011841108d59b7f`.
+- cleanup r3 stored seed hash `2f1b30f9305b7e0dd3e1185a4230d20bfb4afbbd3fdb989cc37b61a5ca3e41f2`, while transferred seed artifact and U0 clone both had `bf305f25776e9bde4edd043d28ff1de681f5bd3cf816305e8ae231d702add693`;
+- required-artifact r2 stored seed hash `3940bbf0731dc0fea9f789880ae8805b365a090c89527fd166994184ecb0e495`, while transferred seed artifact and U0 clone both had `7a0c050e24dca757224e22cf3a52c1d59551a6064347ef50f011841108d59b7f`.
 
-The transferred artifact and downloaded clone were byte-consistent with each other. The stale value originated because `seed-state-hash.txt` was computed from the **live** Copilot home before the seed job ended, while Copilot state could still flush before artifact upload.
+The transferred artifact and downloaded clone were byte-consistent. The stale value originated because `seed-state-hash.txt` was computed from the **live** Copilot home before the seed job ended, while local session state could still flush before artifact upload.
 
 Machine-readable evidence is `evals/execution-recovery-development/session-fork-cross-runner-infrastructure-failures-2026-09-13.json`.
 
-### Frozen-Snapshot Fix
+## Frozen-Snapshot Fix — Integrated
 
-Branch `fix/execution-recovery-frozen-seed-snapshot` changes authority rather than weakening verification:
+PR #34 fixes snapshot authority without weakening any gate. After the seed session and unique session ID exist, the workflow copies the live Copilot home to `frozen-seed-home`, computes `seed-state-hash.txt` from that frozen copy, uploads it, and makes both U0/U1 arms clone only that same frozen copy. Existing pre-treatment hash equality, post-resume runtime attestation, graders, and receipt semantics remain unchanged.
 
-1. after the seed session and unique session ID exist, copy the live Copilot home to `frozen-seed-home`;
-2. compute `seed-state-hash.txt` from `frozen-seed-home/session-state/<sessionId>`;
-3. upload the frozen copy;
-4. make U0/U1 clone only `frozen-seed-home`;
-5. retain the existing pre-treatment hash equality gate, post-resume runtime attestation, graders, and receipt semantics unchanged.
-
-TDD evidence:
+TDD and integration evidence:
 
 - RED commit `11ec4cdd309149a06106719d3402fbcf320c43b8`, run `34733113657`: **98 tests with exactly 1 intended frozen-snapshot contract failure**;
-- GREEN commit `453484abb9b812bd38b99a661c7a6d567781625d`, run `34733172015`: **98/98 tests PASS + `python verify.py` PASS**.
+- GREEN commit `453484abb9b812bd38b99a661c7a6d567781625d`, run `34733172015`: **98/98 tests PASS + `python verify.py` PASS**;
+- state-head run `34733252691`: GREEN;
+- exact PR #34 head `8ba5d908614c46beea6ca76b8f230658344893f4`, PR run `34733275904`: GREEN;
+- PR #34 merged as `00afe536fcef49090cb93d1d60651b092ddc06d2`;
+- post-merge run `34733316358`: **98/98 tests PASS + `python verify.py` PASS**.
 
-This fix is code-verified on its branch but is not yet integrated or live cross-runner validated.
+The frozen-snapshot fix is integrated and code-verified. It still requires new live cross-runner behavioral dispatches to establish whether resume remains matched across seed → U0/U1 runner boundaries after the TOCTOU repair.
 
 ## Candidate Gate
 
@@ -123,15 +114,14 @@ Keep R1 and R1A unchanged. **Do not create R1B.** A new semantic candidate is al
 
 ## Open Debts
 
-1. Integrate the frozen-snapshot fix through exact-head PR and post-merge GREEN.
-2. After integration, dispatch new fresh replicate numbers for the two unresolved cells; preserve r3/r2 as infrastructure-only evidence and never reinterpret them as behavior.
-3. Re-evaluate the two previously non-comparable cells only from new matched receipts.
-4. If a candidate eventually exists, test fresh opposing development stability and preregister a completely new selection boundary before any new hidden bundle.
-5. Design a purpose-built exact-bundle repair path before future hidden experiments require same-identity infrastructure repair.
-6. Final cross-domain hidden holdout remains open.
-7. Provider snapshot immutability remains unavailable.
-8. Independent W5 r4 verification remains missing.
-9. Primitive competition R0–R8, controller-locus comparison, natural activation, cross-language activation, portability, umbrella-vs-micro-skill granularity, myopic-minimality, and belief-collapse probes remain open.
+1. Live-validate the integrated frozen-snapshot workflow with new replicate numbers; preserve cleanup r3 / required-artifact r2 as infrastructure-only evidence.
+2. Re-evaluate the two previously non-comparable cells only from new matched receipts.
+3. If a candidate eventually exists, test fresh opposing development stability and preregister a completely new selection boundary before any new hidden bundle.
+4. Design a purpose-built exact-bundle repair path before future hidden experiments require same-identity infrastructure repair.
+5. Final cross-domain hidden holdout remains open.
+6. Provider snapshot immutability remains unavailable.
+7. Independent W5 r4 verification remains missing.
+8. Primitive competition R0–R8, controller-locus comparison, natural activation, cross-language activation, portability, umbrella-vs-micro-skill granularity, myopic-minimality, and belief-collapse probes remain open.
 
 ## Rejected Directions Worth Preserving
 
@@ -160,7 +150,7 @@ Unresolved research question:
 
 ## Next Best Action
 
-Require GREEN on this state head, review the branch diff, open an exact-head PR for the frozen-snapshot fix, require PR-triggered GREEN, merge with expected head, and require post-merge GREEN. Only then dispatch `incidental-artifact-cleanup` replicate **4** and `required-artifact-preserved` replicate **3** with `model=auto` and `reasoning_effort=default`. Interpret behavior only if the frozen artifact hash, both clone hashes, seed/U0/U1 actual runtime attestations, receipts, and pair summary all remain matched.
+Require GREEN on this state commit. Then dispatch `incidental-artifact-cleanup` replicate **4** and `required-artifact-preserved` replicate **3** through `.github/workflows/execution-recovery-development.yml` with `model=auto` and `reasoning_effort=default`. Interpret behavior only if the frozen artifact hash, both clone hashes, seed/U0/U1 actual runtime attestations, receipts, and pair summary all remain matched.
 
 ## Update Rule
 
