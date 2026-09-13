@@ -5,6 +5,8 @@
 **Released version:** `v1.0.0`  
 **Broader research program:** OPEN  
 **Current runtime-change gate:** CLOSED — no R1B is justified by current evidence  
+**Core skill word count:** 446  
+**Runtime dependencies:** none  
 **Runtime kernel:** 446 words / 2925 bytes / zero runtime dependencies
 
 ## Boot Sequence
