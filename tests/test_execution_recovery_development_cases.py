@@ -55,6 +55,49 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
         for case_id in FRESH_CASES:
             self.assertIn(f"- {case_id}", workflow)
 
+    def test_behavioral_trials_require_exact_preflight_runtime_lock(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("\n  preflight:\n", workflow)
+        self.assertIn("needs: [validate, resolve]", workflow)
+        self.assertIn("selected-attestation.json", workflow)
+        self.assertIn("locked-attestation.json", workflow)
+        self.assertIn("locked_model:", workflow)
+        self.assertIn("locked_reasoning_effort:", workflow)
+        self.assertIn("locked-tool-set.json", workflow)
+        self.assertIn("needs: [validate, resolve, preflight]", workflow)
+        self.assertIn('EXECUTION_MODEL_ID: ${{ needs.preflight.outputs.locked_model }}', workflow)
+        self.assertIn(
+            'EXECUTION_REASONING_EFFORT: ${{ needs.preflight.outputs.locked_reasoning_effort }}',
+            workflow,
+        )
+        self.assertIn('--model="$EXECUTION_MODEL_ID"', workflow)
+        self.assertIn('--reasoning-effort="$EXECUTION_REASONING_EFFORT"', workflow)
+
+        preflight_index = workflow.index("\n  preflight:\n")
+        trial_index = workflow.index("\n  trial:\n")
+        prepare_index = workflow.index("execution_recovery_development.py prepare")
+        self.assertLess(preflight_index, trial_index)
+        self.assertGreater(prepare_index, trial_index)
+        self.assertNotIn(
+            "execution_recovery_development.py prepare",
+            workflow[preflight_index:trial_index],
+        )
+
+    def test_preflight_runtime_lock_fails_closed_and_preserves_evidence(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        for needle in [
+            'selected["model"] != locked["model"]',
+            'selected["reasoning_effort"] != locked["reasoning_effort"]',
+            'selected["tool_set"] != locked["tool_set"]',
+        ]:
+            self.assertIn(needle, workflow)
+        self.assertIn("exact runtime lock mismatch", workflow)
+        self.assertIn(
+            "execution-recovery-model-lock-${{ github.run_id }}",
+            workflow,
+        )
+        self.assertIn("if: always()", workflow)
+
     def test_recovery_pressure_comes_from_tool_policy_not_prompt_answer_leakage(self):
         result = self.run_harness("list", "--json")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
