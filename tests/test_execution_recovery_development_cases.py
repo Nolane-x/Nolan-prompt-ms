@@ -55,6 +55,19 @@ class ExecutionRecoveryDevelopmentCasesTests(unittest.TestCase):
         for case_id in FRESH_CASES:
             self.assertIn(f"- {case_id}", workflow)
 
+    def test_recovery_pressure_comes_from_tool_policy_not_prompt_answer_leakage(self):
+        result = self.run_harness("list", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        cases = {case["id"]: case for case in json.loads(result.stdout)["cases"]}
+        prompt = cases["execution-recovery-required"]["prompt"].lower()
+        self.assertIn("./promote.sh", prompt)
+        self.assertNotIn("cannot be invoked", prompt)
+        self.assertNotIn("permitted path", prompt)
+
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("--allow-tool='write,shell(python:*)'", workflow)
+        self.assertNotIn("--allow-all", workflow)
+
     def test_execution_recovery_required_needs_target_change_but_accepts_focused_recovery(self):
         with tempfile.TemporaryDirectory() as td:
             workspace = pathlib.Path(td) / "workspace"
